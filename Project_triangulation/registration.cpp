@@ -140,8 +140,6 @@ void registration::extractData(std::vector<std::string> filename, std::vector<re
 
 void registration::extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale)
 {
-	
-
 	data.resize(filename.size());
 	octree.resize(filename.size());
 	boundingBox.resize(filename.size());
@@ -212,13 +210,13 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 				xx += _vec[i].x;
 				yy += _vec[i].y;
 
+				//筛选处理
 				if (xx < minx) {
 					minx = xx;
 				}
 				if(xx > maxx){
 					maxx = xx;
 				}
-
 				if (yy < miny)
 				{
 					miny = yy; 
@@ -227,16 +225,15 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 				{
 					maxy =yy;
 				}
-
 				if (zz<minz)
 				{
 					minz = zz;
 				}
-
 				if (zz>maxz)
 				{
 					maxz = zz;
 				}
+				//*****************
 
 				//temp.push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0], x*R[0][1] + y*R[1][1] + z*R[2][1], x*R[0][2] + y*R[1][2] + z*R[2][2]));
 				//加偏移量
@@ -262,21 +259,59 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 
 void registration::extractCsvData(std::vector<std::string> filename, std::vector<regis::Vec> _vec)
 {
+	//设置读入数据
 	data.resize(filename.size());
+	//初始化八叉树大小
 	octree.resize(filename.size());
+	//初始化包围盒大小
+	boundingBox.resize(filename.size());
+
+
 	for (int i = 0; i < filename.size(); i++)
 	{
 		FILE* file;
 		fopen_s(&file, filename[i].c_str(), "r");
 		regis::Point temp;
 		std::cout << "reading file:" << filename[i] << std::endl;
+		double minx = 9999, miny = 9999, minz = 9999, maxx = -9999, maxy = -9999, maxz = -9999;
 		while (!std::feof(file))
 		{
 			fscanf_s(file, "%lf,%lf,%lf,%*lf,%*lf,%*lf\n", &temp.x, &temp.y, &temp.z);
+			if (temp.x*temp.x + temp.y * temp.y + temp.z * temp.z > 225)
+			{
+				continue;
+			}
 			temp.x += _vec[i].x;
 			temp.y += _vec[i].y;
 			data[i].push_back(temp);
+
+			//筛选处理
+			if (temp.x < minx) {
+				minx = temp.x;
+			}
+			if (temp.x > maxx) {
+				maxx = temp.x;
+			}
+			if (temp.y < miny)
+			{
+				miny = temp.y;
+			}
+			if (temp.y > maxy)
+			{
+				maxy = temp.y;
+			}
+			if (temp.z < minz)
+			{
+				minz = temp.z;
+			}
+			if (temp.z > maxz)
+			{
+				maxz = temp.z;
+			}
+			//*****************
 		}
+		boundingBox[i] = regis::Box(minx, miny, minz, maxx, maxy, maxz);
+
 		std::cout << filename[i] << " filesize:" << data[i].size() << std::endl;
 
 		std::cout << "initialize octree for " << filename[i] << std::endl;
@@ -368,7 +403,7 @@ double registration::getICPerror(std::vector<regis::Point> moveStation, std::vec
 	return result / count;
 }
 
-double registration::getICPerror_OC(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample, regis::ocTree moveOC, regis::ocTree refOC)
+double registration::getICPerror_OC(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample,const regis::ocTree* moveOC, const regis::ocTree* refOC)
 {
 	double result = 0;
 
@@ -419,26 +454,24 @@ double registration::findNearestPoint(regis::Point a, std::vector<regis::Point> 
 	return dis;
 }
 
-double registration::findNearestPoint_OC(regis::Point a, std::vector<regis::Point> ref, double tttt, regis::ocTree refOC)
+double registration::findNearestPoint_OC(regis::Point a, std::vector<regis::Point> ref, double tttt,const regis::ocTree* rOC)
 {
 	double dis = 9999;
 	float step = 0.05;
 	regis::Point res;
 	std::vector<uint32_t> sss;
-	sss.clear();
-	refOC._ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, 2.0f, sss);
+	
+	rOC->_ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, 2.0f, sss);
 	if (sss.size() == 0) {
 		return -1;
 	}
 
-	sss.clear();
-	refOC._ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, step, sss);
+	rOC->_ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, step, sss);
 
 	while (sss.size()==0)
 	{
-		sss.clear();
 		step += 0.05;
-		refOC._ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, step, sss);
+		rOC->_ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(a, step, sss);
 	}
 
 	for (size_t i = 0; i < sss.size(); i++)
@@ -522,6 +555,7 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 
 	//建立临时八叉树
 	std::vector<regis::ocTree> target_octree;
+	target_octree.resize(target_data.size());
 
 	//初始迭代步长
 	int iterator_times = 360 / step;
@@ -546,6 +580,7 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 		}
 		std::cout << "旋转点云完毕." << std::endl;
 		
+		//建立临时八叉树
 		target_octree.resize(target_data.size());
 		for (int i = 0; i < target_data.size(); i++)
 		{
@@ -553,16 +588,17 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 		}
 		std::cout << "特征数据八叉树建立完毕." << std::endl;
 
+
 		std::cout << "calculate ICP error " << std::endl;
 		//计算最近点误差
-		res += getICPerror_OC(target_data[0], target_data[1], _vec[0], _vec[1], 1000,target_octree[0],target_octree[1]);
+		res += getICPerror_OC(target_data[0], target_data[1], _vec[0], _vec[1], 1000,&target_octree[0],&target_octree[1]);
 		std::cout << "Station 0-1 " << "ICP error:" << res << std::endl;
-		res += getICPerror_OC(target_data[1], target_data[2], _vec[1], _vec[2], 1000, target_octree[1], target_octree[2]);
+		res += getICPerror_OC(target_data[1], target_data[2], _vec[1], _vec[2], 1000, &target_octree[1], &target_octree[2]);
 		std::cout << "Station 1-2 " << "ICP error:" << res << std::endl;
-// 		res += getICPerror_OC(target_data[2], target_data[3], _vec[2], _vec[3], 1000, target_octree[2], target_octree[3]);
-// 		std::cout << "Station 2-3 " << "ICP error:" << res << std::endl;
-// 		res += getICPerror_OC(target_data[3], target_data[4], _vec[3], _vec[4], 1000, target_octree[3], target_octree[4]);
-// 		std::cout << "Station 3-4 " << "ICP error:" << res << std::endl;
+ 		res += getICPerror_OC(target_data[2], target_data[3], _vec[2], _vec[3], 1000, &target_octree[2], &target_octree[3]);
+ 		std::cout << "Station 2-3 " << "ICP error:" << res << std::endl;
+ 		res += getICPerror_OC(target_data[3], target_data[4], _vec[3], _vec[4], 1000, &target_octree[3], &target_octree[4]);
+ 		std::cout << "Station 3-4 " << "ICP error:" << res << std::endl;
 
 		std::cout << "iterator: " << i << " ,ICP error:" << res << std::endl;
 
@@ -640,7 +676,7 @@ void registration::CalculateFeature(double ocDis, bool x_bool, bool y_bool, bool
 					for (int32_t high=0;high<highnum;high++)
 					{
 						t.z = boundingBox[i].minz + ocDis / 2.0 + ocDis*high;
-						octree[i]._ocTree.radiusNeighbors<unibn::MaxDistance<regis::Point>>(t, float(ocDis)/2, zres);
+						octree[i]._ocTree.radiusNeighbors<unibn::MaxDistance<regis::Point>>(t,ocDis/2.0, zres);
 						if (zres.size()!=0)
 						{
 							accumulate_res.insert(accumulate_res.end(), zres.begin(), zres.end());

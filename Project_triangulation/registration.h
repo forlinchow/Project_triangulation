@@ -112,11 +112,11 @@ public:
 
 	double getICPerror(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample);
 
-	double getICPerror_OC(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample, regis::ocTree moveOC, regis::ocTree refOC);
+	double getICPerror_OC(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample, const regis::ocTree* moveOC, const regis::ocTree* refOC);
 
 	double findNearestPoint(regis::Point a, std::vector<regis::Point> ref, double tttt);
 
-	double findNearestPoint_OC(regis::Point a, std::vector<regis::Point> ref, double tttt, regis::ocTree refOC);
+	double findNearestPoint_OC(regis::Point a, std::vector<regis::Point> ref, double tttt,const regis::ocTree* refOC);
 
 	regis::Point findNearestPoint(regis::Point a, std::vector<regis::Point> ref);
 
