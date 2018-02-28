@@ -781,17 +781,18 @@ void registration::writefileTest()
 
 std::vector<std::vector<regis::Point>> registration::getFeaturedata(double fea,double fea_len)
 {
+	//获取指定Feature抽稀数据
 	std::vector<std::vector<regis::Point>> temp;
- 	temp.resize(pointFeature.size());
+ 	temp.resize(data.size());
 
 	for (int i=0;i<temp.size();i++)
 	{
 		
-		for (int j=0;j<pointFeature[i].size();j++)
+		for (int j=0;j<subdata_ind[i].size();j++)
 		{
-			if (pointFeature[i][j].zChannel>fea )
+			if (pointFeature[i][subdata_ind[i][j]].zChannel>fea )
 			{
-				temp[i].push_back(data[i][j]);
+				temp[i].push_back(data[i][subdata_ind[i][j]]);
 			}
 		}
 		std::cout << "特征数据 " << i << "大小为:" << temp[i].size() << std::endl;
