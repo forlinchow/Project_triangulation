@@ -146,5 +146,8 @@ private:
 
 	std::vector <std::vector<regis::Point>> subdata;
 	std::vector<regis::ocTree> suboctree;
+
+	std::vector<std::vector<uint32_t>>subdata_ind;
+
 	HANDLE _mutex;
 };

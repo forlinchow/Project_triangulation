@@ -616,6 +616,7 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 
 void registration::getVisableArea()
 {
+
 }
 
 void registration::getdatasize()
@@ -626,10 +627,29 @@ void registration::getdatasize()
 }
 
 void registration::subsample(double subDis)
-{
-	long int deal_size = 0;
-	std::vector <std::vector<regis::Point>> temp = data;
+{	
+	for (int i=0;i<data.size();i++)
+	{
+		std::vector<uint32_t> ind;
+		std::vector<uint32_t> res;
+		ind.resize(data[i].size());
 
+		for (size_t j=0;j<ind.size();j++)
+		{
+			if (ind[j]==0){
+				res.push_back(j);
+				std::vector<uint32_t> t;
+				octree[i]._ocTree.radiusNeighbors<unibn::L2Distance<regis::Point>>(data[i][j], subDis, t);
+				for (size_t k = 0; k < t.size(); k++)
+				{
+					ind[t[k]] = 1;
+				}
+			}
+		}
+		subdata_ind.push_back(res);
+
+		std::cout << "subsample data" << i << "size:" << res.size() << std::endl;
+	}
 }
 
 void registration::CalculateFeature(double ocDis, bool x_bool, bool y_bool, bool z_bool)
