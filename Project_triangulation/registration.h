@@ -1,8 +1,32 @@
 #pragma once
 #include <string>
 #include "Octree.hpp"
+#include <pcl/point_cloud.h>
+#include <boost/make_shared.hpp>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_representation.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/filter.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/registration/icp.h>
+#include <pcl/registration/icp_nl.h>
+#include <pcl/registration/gicp.h>
+//#include <pcl/registration/gicp.h>
+//#include <pcl/registration/gicp.h>
+//#include <pcl/registration>
+#include <pcl/registration/transforms.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #import "iQOpen.dll" no_namespace
 #define PI 3.14159265f
+
+typedef pcl::PointXYZ PointT_pcl;
+typedef pcl::PointCloud<PointT_pcl> PointCloud;
+typedef pcl::PointNormal PointNormalT;
+typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
 
 namespace regis {
 
@@ -96,6 +120,7 @@ class registration
 {
 public:
 	registration() {
+		p = new pcl::visualization::PCLVisualizer("window");
 	};
 	~registration() {
 		data.clear();
@@ -105,6 +130,8 @@ public:
 	void extractData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
 
 	void extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1 );
+
+	void extractFLS2PCD(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);
 	
 	void extractCsvData(std::vector<std::string> filename, std::vector<regis::Vec> _vec);
 
@@ -123,7 +150,7 @@ public:
 	void getRotation(std::vector < regis::Vec > _vec, double step = 10);
 
 	void getRotation2(std::vector < regis::Vec > _vec, double step = 10);  //特征点版本
-
+	
 	void getVisableArea();
 
 	void getdatasize();
@@ -135,6 +162,10 @@ public:
 	void octreeTest();
 
 	void writefileTest();
+
+	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false);
+
+	void showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source);
 
 	std::vector <std::vector<regis::Point>> getFeaturedata(double fea = 0.9, double fea_len = 0);
 
@@ -148,6 +179,30 @@ private:
 	std::vector<regis::ocTree> suboctree;
 
 	std::vector<std::vector<uint32_t>>subdata_ind;
-
+	std::vector<PointCloud::Ptr> pcddata;
+	pcl::visualization::PCLVisualizer *p;
+	int vp_1, vp_2;
 	HANDLE _mutex;
+};
+
+// Define a new point representation for < x, y, z, curvature >
+class MyPointRepresentation : public pcl::PointRepresentation <PointNormalT>
+{
+	using pcl::PointRepresentation<PointNormalT>::nr_dimensions_;
+public:
+	MyPointRepresentation()
+	{
+		// Define the number of dimensions
+		nr_dimensions_ = 4;
+	}
+
+	// Override the copyToFloatArray method to define our feature vector
+	virtual void copyToFloatArray(const PointNormalT &p, float * out) const
+	{
+		// < x, y, z, curvature >
+		out[0] = p.x;
+		out[1] = p.y;
+		out[2] = p.z;
+		out[3] = p.curvature;
+	}
 };

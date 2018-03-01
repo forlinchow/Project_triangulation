@@ -7,6 +7,9 @@
 #include <iostream>
 #include <string.h>
 
+using pcl::visualization::PointCloudColorHandlerGenericField;
+using pcl::visualization::PointCloudColorHandlerCustom;
+
 DWORD WINAPI readFLS(LPVOID lpParameter) {
 	CoInitialize(NULL);
 		regis::threadParam* t = (regis::threadParam*)lpParameter;
@@ -255,6 +258,132 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 	}
 
 	
+}
+
+void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale)
+{
+	pcddata.resize(filename.size());
+	for (int i=0;i<pcddata.size();i++)
+	{
+		PointCloud::Ptr a(new PointCloud);
+		pcddata[i] = a;
+	}
+	boundingBox.resize(filename.size());
+
+	for (int32_t i = 0; i < filename.size(); i++)
+	{
+		CoInitialize(NULL);
+		// 以下liscence需要整段输入，key放入liscence key
+		BSTR licenseCode =
+			L"FARO Open Runtime License\n"
+			L"Key:W2CW4PNRTCTXXJ6T6KXYSRUPL\n" // License Key
+			L"\n"
+			L"The software is the registered property of "
+			L"FARO Scanner Production GmbH, Stuttgart, Germany.\n"
+			L"All rights reserved.\n"
+			L"This software may only be used with written permission "
+			L"of FARO Scanner Production GmbH, Stuttgart, Germany.";
+
+		IiQLicensedInterfaceIfPtr liPtr(__uuidof(iQLibIf));
+		liPtr->License = licenseCode;
+		IiQLibIfPtr libRef = static_cast<IiQLibIfPtr>(liPtr);	//点云数据IO
+		libRef->load(filename[i].c_str());						//加载数据
+		IiQObjectIfPtr libObj = libRef->getScanObject(0);
+		IiQScanObjIfPtr scanRef = libObj->getScanObjSpecificIf();//法如扫描属性IO
+		scanRef->load();//加载属性
+		double x, y, z, angle;
+		int refl;
+		int rows = libRef->getScanNumRows(0);
+		int cols = libRef->getScanNumCols(0);
+
+		// 获取变换矩阵的参数
+		libRef->getScanOrientation(0, &x, &y, &z, &angle);
+		// 由文档公式得
+		double ca = cos(-angle);
+		double sa = sin(-angle);
+		// 变换矩阵
+		double R[3][3];
+		R[0][0] = x * x * (1 - ca) + ca;
+		R[0][1] = y * x * (1 - ca) - z * sa;
+		R[0][2] = z * x * (1 - ca) + y * sa;
+		R[1][0] = x * y * (1 - ca) + z * sa;
+		R[1][1] = y * y * (1 - ca) + ca;
+		R[1][2] = z * y * (1 - ca) - x * sa;
+		R[2][0] = x * z * (1 - ca) - y * sa;
+		R[2][1] = y * z * (1 - ca) + x * sa;
+		R[2][2] = z * z * (1 - ca) + ca;
+
+		double minx = 0, miny = 0, minz = 0, maxx = 0, maxy = 0, maxz = 0;
+		for (int col = 0; col < cols; col = col + scale)
+		{
+			for (int row = 0; row < rows; row = row + scale) {
+				libRef->getScanPoint(0, row, col, &x, &y, &z, &refl);     // 读取数据,x,y,z 点坐标， refl为反射值
+				if (x == 0 && y == 0 && z == 0)
+				{
+					continue;
+				}
+
+				double xx, yy, zz;
+				xx = x*R[0][0] + y*R[1][0] + z*R[2][0];
+				yy = x*R[0][1] + y*R[1][1] + z*R[2][1];
+				zz = x*R[0][2] + y*R[1][2] + z*R[2][2];
+
+				if (xx*xx + yy*yy + zz*zz>225)
+				{
+					continue;
+				}
+
+				xx += _vec[i].x;
+				yy += _vec[i].y;
+
+				//筛选处理
+				if (xx < minx) {
+					minx = xx;
+				}
+				if (xx > maxx) {
+					maxx = xx;
+				}
+				if (yy < miny)
+				{
+					miny = yy;
+				}
+				if (yy>maxy)
+				{
+					maxy = yy;
+				}
+				if (zz<minz)
+				{
+					minz = zz;
+				}
+				if (zz>maxz)
+				{
+					maxz = zz;
+				}
+				//*****************
+
+				//temp.push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0], x*R[0][1] + y*R[1][1] + z*R[2][1], x*R[0][2] + y*R[1][2] + z*R[2][2]));
+				//加偏移量
+				//data[i].push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0] + _vec[i].x, x*R[0][1] + y*R[1][1] + z*R[2][1] +_vec[i].y, x*R[0][2] + y*R[1][2] + z*R[2][2]));
+				//不加偏移量
+				//data[i].push_back(regis::Point(xx,yy,zz));
+				//加偏移量
+				(*pcddata[i]).push_back(PointT_pcl(xx, yy, zz));
+			}
+		}
+		//remove NAN points from the cloud
+		std::vector<int> indices;
+		pcl::removeNaNFromPointCloud(*pcddata[i],*pcddata[i], indices);
+		
+		boundingBox[i] = regis::Box(minx, miny, minz, maxx, maxy, maxz);
+		libRef = NULL;
+		liPtr = NULL;
+		CoUninitialize();
+	}
+
+	
+	showCloudsLeft(pcddata[0],pcddata[1]);
+	p->createViewPort(0.0, 0, 0.5, 1.0, vp_1);
+	p->createViewPort(0.5, 0, 1.0, 1.0, vp_2);
 }
 
 void registration::extractCsvData(std::vector<std::string> filename, std::vector<regis::Vec> _vec)
@@ -605,13 +734,13 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 		if (res < min_err)
 		{
 			min_err = res;
-			min_err_angle = i * 10;
-			std::cout << "best angle: " << min_err_angle << std::endl;
-			std::cout << "ICP error:" << res << std::endl;
+			min_err_angle = i * step;
 		}
 
 		target_octree.swap(std::vector<regis::ocTree>());
 	}
+	std::cout << "best angle: " << min_err_angle << std::endl;
+	std::cout << "ICP error:" << min_err << std::endl;
 }
 
 void registration::getVisableArea()
@@ -777,6 +906,158 @@ void registration::writefileTest()
 		fclose(fp);
 	}
 	
+}
+
+void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f & final_transform, bool downsample)
+{
+	PointCloud::Ptr src(new PointCloud);
+	PointCloud::Ptr tgt(new PointCloud);
+
+
+
+	pcl::VoxelGrid<PointT_pcl> grid;
+	if (downsample)
+	{
+		grid.setLeafSize(0.03, 0.03, 0.01);
+		grid.setInputCloud(cloud_src);
+		grid.filter(*src);
+
+		grid.setInputCloud(cloud_tgt);
+		grid.filter(*tgt);
+	}
+	else
+	{
+		src = cloud_src;
+		tgt = cloud_tgt;
+	}
+
+
+	// Compute surface normals and curvature
+	PointCloudWithNormals::Ptr points_with_normals_src(new PointCloudWithNormals);
+	PointCloudWithNormals::Ptr points_with_normals_tgt(new PointCloudWithNormals);
+
+	pcl::NormalEstimation<PointT_pcl, PointNormalT> norm_est;
+	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+	norm_est.setSearchMethod(tree);
+	norm_est.setKSearch(30);
+
+	norm_est.setInputCloud(src);
+	norm_est.setViewPoint(27.419594, 6.191127, 0.0);
+	norm_est.compute(*points_with_normals_src);
+	pcl::copyPointCloud(*src, *points_with_normals_src);
+
+	norm_est.setInputCloud(tgt);
+	norm_est.setViewPoint(20.608019, 6.209724, 0.0);
+	norm_est.compute(*points_with_normals_tgt);
+	pcl::copyPointCloud(*tgt, *points_with_normals_tgt);
+
+	//
+	// Instantiate our custom point representation (defined above) ...
+	MyPointRepresentation point_representation;
+	// ... and weight the 'curvature' dimension so that it is balanced against x, y, and z
+	float alpha[4] = { 1.0, 1.0, 1.0, 1.0 };
+	point_representation.setRescaleValues(alpha);
+
+	//
+	// Align
+	//pcl::IterativeClosestPointNonLinear<PointNormalT, PointNormalT> reg;
+	//pcl::IterativeClosestPointWithNormals<PointNormalT, PointNormalT> reg;
+	pcl::GeneralizedIterativeClosestPoint<PointT_pcl, PointT_pcl> reg;
+	//pcl::IterativeClosestPoint<PointNormalT, PointNormalT> icp;
+	//reg.setTransformationEpsilon(1e-6);
+
+	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
+	// Note: adjust this based on the size of your datasets
+	reg.setMaxCorrespondenceDistance(0.1);
+	//reg.setEuclideanFitnessEpsilon(1e-10);
+	//reg.setRANSACIterations(20);
+	//reg.setRANSACOutlierRejectionThreshold(1);
+
+	// Set the point representation
+	//reg.setPointRepresentation(boost::make_shared<const MyPointRepresentation>(point_representation));
+
+	//reg.setInputSource(points_with_normals_src);
+	//reg.setInputTarget(points_with_normals_tgt);
+	reg.setInputSource(src);
+	reg.setInputTarget(tgt);
+
+
+
+	//
+	// Run the same optimization in a loop and visualize the results
+	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity(), prev, targetToSource;
+	PointCloud::Ptr reg_result = src;
+	//PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
+	reg.setMaximumIterations(100);
+	for (int i = 0; i < 30; ++i)
+	{
+		PCL_INFO("Iteration Nr. %d.\n", i);
+		//cout << reg.getFinalTransformation() << endl;
+
+
+		// save cloud for visualization purpose
+		src = reg_result;
+
+		// Estimate
+		reg.setInputSource(src);
+		reg.align(*reg_result);
+
+		//accumulate transformation between each Iteration
+		Ti = reg.getFinalTransformation() * Ti;
+		cout << Ti << endl;
+		cout << "icp registration error" << reg.getFitnessScore() << std::endl;
+		//if the difference between this transformation and the previous one
+		//is smaller than the threshold, refine the process by reducing
+		//the maximal correspondence distance
+		if (fabs((reg.getLastIncrementalTransformation() - prev).sum()) < reg.getTransformationEpsilon())
+			reg.setMaxCorrespondenceDistance(reg.getMaxCorrespondenceDistance() - 0.001);
+
+		prev = reg.getLastIncrementalTransformation();
+
+		// visualize current state
+		//showCloudsRight(points_with_normals_tgt, points_with_normals_src);
+	}
+
+	//
+	// Get the transformation from target to source
+	targetToSource = Ti.inverse();
+
+	//
+	// Transform target back in source frame
+	pcl::transformPointCloud(*cloud_tgt, *output, targetToSource);
+
+// 	p->removePointCloud("source");
+// 	p->removePointCloud("target");
+
+// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_tgt_h(output, 0, 255, 0);
+// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_src_h(cloud_src, 255, 0, 0);
+// 	p->addPointCloud(output, cloud_tgt_h, "target", vp_2);
+// 	p->addPointCloud(cloud_src, cloud_src_h, "source", vp_2);
+
+//	PCL_INFO("Press q to continue the registration.\n");
+// 	p->spin();
+// 
+// 	p->removePointCloud("source");
+// 	p->removePointCloud("target");
+
+	//add the source to the transformed target
+	*output += *cloud_src;
+
+	final_transform = targetToSource;
+}
+
+void registration::showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source)
+{
+	p->removePointCloud("vp1_target");
+	p->removePointCloud("vp1_source");
+
+	PointCloudColorHandlerCustom<PointT_pcl> tgt_h(cloud_target, 0, 255, 0);
+	PointCloudColorHandlerCustom<PointT_pcl> src_h(cloud_source, 255, 0, 0);
+	p->addPointCloud(cloud_target, tgt_h, "vp1_target", vp_1);
+	p->addPointCloud(cloud_source, src_h, "vp1_source", vp_1);
+
+	//PCL_INFO("Press q to begin the registration.\n");
+	p->spin();
 }
 
 std::vector<std::vector<regis::Point>> registration::getFeaturedata(double fea,double fea_len)
