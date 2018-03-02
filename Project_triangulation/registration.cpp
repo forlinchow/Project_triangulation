@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <time.h>
 #include <iostream>
-#include <string.h>
+#include <string>
 
 using pcl::visualization::PointCloudColorHandlerGenericField;
 using pcl::visualization::PointCloudColorHandlerCustom;
@@ -382,8 +382,7 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 
 	
 	showCloudsLeft(pcddata[0],pcddata[1]);
-	p->createViewPort(0.0, 0, 0.5, 1.0, vp_1);
-	p->createViewPort(0.5, 0, 1.0, 1.0, vp_2);
+
 }
 
 void registration::extractCsvData(std::vector<std::string> filename, std::vector<regis::Vec> _vec)
@@ -457,6 +456,13 @@ regis::Point registration::rotatePoint(regis::Point p, regis::Point rotateCenter
 		double x = (p.x - rotateCenter.x)*std::cos((angle / 180)*PI) - (p.y - rotateCenter.y)*std::sin((angle / 180)*PI) + rotateCenter.x;
 		double y = (p.x - rotateCenter.x)*std::sin((angle / 180)*PI) + (p.y - rotateCenter.y)*std::cos((angle / 180)*PI) + rotateCenter.y;
 		return regis::Point(x, y, p.z);
+}
+
+PointT_pcl registration::rotatePoint(PointT_pcl p, regis::Point rotateCenter, double angle)
+{
+	double x = (p.x - rotateCenter.x)*std::cos((angle / 180)*PI) - (p.y - rotateCenter.y)*std::sin((angle / 180)*PI) + rotateCenter.x;
+	double y = (p.x - rotateCenter.x)*std::sin((angle / 180)*PI) + (p.y - rotateCenter.y)*std::cos((angle / 180)*PI) + rotateCenter.y;
+	return PointT_pcl(x, y, p.z);
 }
 
 double registration::getICPerror(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample)
@@ -560,6 +566,48 @@ double registration::getICPerror_OC(std::vector<regis::Point> moveStation, std::
 				result +=tr;
 			}
 
+		}
+	}
+
+	std::cout << count << "pairs of common points are selected." << std::endl;
+	return result / count;
+}
+
+double registration::getICPerror_KD(const PointCloud::Ptr moveStation,const PointCloud::Ptr refStation, regis::Vec moveS, regis::Vec refS, int sample, const pcl::KdTreeFLANN<PointT_pcl> refKD)
+{
+	double result = 0;
+
+	//采样大小
+	if (moveStation->size() < sample)
+	{
+		sample = moveStation->size();
+	}
+	int count = 0;
+	//获取站点中心包围盒大小  
+	double dis = std::pow(std::pow(moveS.x - refS.x, 2) + std::pow(moveS.y - refS.y, 2), 0.5);
+
+	//最多运行1.5sample的循环,version 2
+	for (int i = 0; i < moveStation->size(); i++)
+	{
+		//当sample的数量达标时退出循环
+		if (count == sample)
+			break;
+
+		//普通版本
+		double d1= std::pow(std::pow(moveStation->points[i].x - moveS.x, 2) +\
+			std::pow(moveStation->points[i].y - moveS.y, 2), 0.5);
+		double d2 = std::pow(std::pow(moveStation->points[i].x - refS.x, 2) + \
+			std::pow(moveStation->points[i].y - refS.y, 2), 0.5);
+		
+		std::vector<int> pointIdxNKNSearch(1);
+		std::vector<float> pointNKNSquaredDistance(1);
+
+		if (d1 < dis || d2 < dis) {
+			int tr=refKD.nearestKSearch((*moveStation)[i], 1, pointIdxNKNSearch, pointNKNSquaredDistance);
+			if (tr ==1 && pointNKNSquaredDistance[0]<2) {
+				count++;
+				result += pointNKNSquaredDistance[0];
+			}
 		}
 	}
 
@@ -743,6 +791,81 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 	std::cout << "ICP error:" << min_err << std::endl;
 }
 
+void registration::getRotation_onRender(std::vector<regis::Vec> _vec, double step)
+{
+	//获取特征数据
+	std::vector<PointCloud::Ptr> target_data;
+	for (int i=0;i<data.size();i++)
+	{
+		target_data.push_back(PointCloud::Ptr(new PointCloud));
+	}
+	getFeaturedata(target_data, 0.9, 0);
+	std::cout << "特征数据获取完毕. " << std::endl;
+
+	//建立临时八叉树
+	std::vector<pcl::KdTreeFLANN<PointT_pcl>> target_octree;
+	target_octree.resize(target_data.size());
+
+	//初始迭代步长
+	int iterator_times = 360 / step;
+	double min_err_angle = 0;    //最小误差角度
+	double min_err = 999999;    //最小误差值
+
+	for (size_t i = 0; i < iterator_times; i++)
+	{
+		std::cout << "iterator: " << i << "begin." << std::endl;
+
+		double res = 0;
+
+		std::cout << "rotating point cloud...." << std::endl;
+
+		//旋转点云
+		for (size_t j = 0; j < target_data.size(); j++)
+		{
+			for (size_t k = 0; k < target_data[j]->points.size(); k++)
+			{
+				target_data[j]->points[k] = rotatePoint(target_data[j]->points[k], regis::Point(_vec[j].x, _vec[j].y, 0), step);
+			}
+		}
+		std::cout << "旋转点云完毕." << std::endl;
+
+		
+
+		//建立临时kd树
+		target_octree.resize(target_data.size());
+		for (int i = 0; i < target_data.size(); i++)
+		{
+			target_octree[i].setInputCloud(target_data[i]);
+		}
+		std::cout << "特征数据八叉树建立完毕." << std::endl;
+
+
+		std::cout << "calculate ICP error " << std::endl;  
+		//计算最近点误差
+		res += getICPerror_KD(target_data[0], target_data[1], _vec[0], _vec[1], 1000, target_octree[1]);
+		std::cout << "Station 0-1 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[1], target_data[2], _vec[1], _vec[2], 1000,target_octree[2]);
+		std::cout << "Station 1-2 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[2], target_data[3], _vec[2], _vec[3], 1000,target_octree[3]);
+		std::cout << "Station 2-3 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[3], target_data[4], _vec[3], _vec[4], 1000,target_octree[4]);
+		std::cout << "Station 3-4 " << "ICP error:" << res << std::endl;
+
+		std::cout << "iterator: " << i << " ,ICP error:" << res << std::endl;
+
+		if (res < min_err)
+		{
+			min_err = res;
+			min_err_angle = i * step;
+			showRotateCloudRight(target_data);
+		}
+
+		target_octree.swap(std::vector<pcl::KdTreeFLANN<PointT_pcl>>());
+	}
+	std::cout << "best angle: " << min_err_angle << std::endl;
+	std::cout << "ICP error:" << min_err << std::endl;
+}
+
 void registration::getVisableArea()
 {
 
@@ -913,8 +1036,6 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	PointCloud::Ptr src(new PointCloud);
 	PointCloud::Ptr tgt(new PointCloud);
 
-
-
 	pcl::VoxelGrid<PointT_pcl> grid;
 	if (downsample)
 	{
@@ -1060,6 +1181,49 @@ void registration::showCloudsLeft(const PointCloud::Ptr cloud_target, const Poin
 	p->spin();
 }
 
+void registration::showRotateCloudLeft(const std::vector<PointCloud::Ptr> clouds)
+{
+	for (int i=0;i<clouds.size();i++)
+	{
+		p->removePointCloud(std::string("l").append(std::to_string(i)));
+		PointCloudColorHandlerCustom<PointT_pcl> tgt_h(clouds[i], int(rand()*255), int(rand() * 255), int(rand() * 255));
+		p->addPointCloud(clouds[i], tgt_h, std::string("l").append(std::to_string(i)), vp_1);
+	}
+	p->spin();
+}
+
+void registration::showCloudsRight(const PointCloudWithNormals::Ptr cloud_target, const PointCloudWithNormals::Ptr cloud_source)
+{
+	p->removePointCloud("source");
+	p->removePointCloud("target");
+
+
+	PointCloudColorHandlerGenericField<PointNormalT> tgt_color_handler(cloud_target, "curvature");
+	if (!tgt_color_handler.isCapable())
+		PCL_WARN("Cannot create curvature color handler!");
+
+	PointCloudColorHandlerGenericField<PointNormalT> src_color_handler(cloud_source, "curvature");
+	if (!src_color_handler.isCapable())
+		PCL_WARN("Cannot create curvature color handler!");
+
+
+	p->addPointCloud(cloud_target, tgt_color_handler, "target", vp_2);
+	p->addPointCloud(cloud_source, src_color_handler, "source", vp_2);
+
+	p->spin();
+}
+
+void registration::showRotateCloudRight(const std::vector<PointCloud::Ptr> clouds)
+{
+	for (int i = 0; i < clouds.size(); i++)
+	{
+		p->removePointCloud(std::string("r").append(std::to_string(i)));
+		PointCloudColorHandlerCustom<PointT_pcl> tgt_h(clouds[i], int(rand() * 255), int(rand() * 255), int(rand() * 255));
+		p->addPointCloud(clouds[i], tgt_h, std::string("r").append(std::to_string(i)), vp_2);
+	}
+	p->spin();
+}
+
 std::vector<std::vector<regis::Point>> registration::getFeaturedata(double fea,double fea_len)
 {
 	//获取指定Feature抽稀数据
@@ -1068,7 +1232,6 @@ std::vector<std::vector<regis::Point>> registration::getFeaturedata(double fea,d
 
 	for (int i=0;i<temp.size();i++)
 	{
-		
 		for (int j=0;j<subdata_ind[i].size();j++)
 		{
 			if (pointFeature[i][subdata_ind[i][j]].zChannel>fea )
@@ -1078,8 +1241,25 @@ std::vector<std::vector<regis::Point>> registration::getFeaturedata(double fea,d
 		}
 		std::cout << "特征数据 " << i << "大小为:" << temp[i].size() << std::endl;
 	}
-
 	return temp;
+}
+
+void registration::getFeaturedata(std::vector<PointCloud::Ptr> tPtr, double fea, double fea_len)
+{
+	//获取指定Feature抽稀数据
+	for (int i = 0; i < data.size(); i++)
+	{
+		for (int j = 0; j < subdata_ind[i].size(); j++)
+		{
+			if (pointFeature[i][subdata_ind[i][j]].zChannel > fea)
+			{
+				tPtr[i]->push_back(PointT_pcl(data[i][subdata_ind[i][j]].x, \
+					data[i][subdata_ind[i][j]].y, data[i][subdata_ind[i][j]].z));
+			}
+		}
+		std::cout << "特征数据 " << i << "大小为:" << tPtr[i]->size() << std::endl;
+	}
+	showRotateCloudLeft(tPtr);
 }
 
 

@@ -45,9 +45,9 @@ void main(){
 // 	filepath.push_back(std::string("Gd_zh_171022_047 - Cloud.csv"));
 	filepath.push_back(std::string("Gd_zh_171022_043.fls"));
  	filepath.push_back(std::string("Gd_zh_171022_044.fls"));
-//  	filepath.push_back(std::string("Gd_zh_171022_045.fls"));
-// 	filepath.push_back(std::string("Gd_zh_171022_046.fls"));
-//  	filepath.push_back(std::string("Gd_zh_171022_047.fls"));
+ 	filepath.push_back(std::string("Gd_zh_171022_045.fls"));
+	filepath.push_back(std::string("Gd_zh_171022_046.fls"));
+ 	filepath.push_back(std::string("Gd_zh_171022_047.fls"));
 
 
 // 	filepath.push_back(std::string("43z.csv"));
@@ -58,9 +58,9 @@ void main(){
 	std::vector < regis::Vec > _vec;
 	_vec.push_back(regis::Vec(27.39,6.21));
 	_vec.push_back(regis::Vec(20.57,6.18));
-// 	_vec.push_back(regis::Vec(11.98,5.62));
-//  	_vec.push_back(regis::Vec(9.97,2.27));
-//  	_vec.push_back(regis::Vec(3.48,2.39));
+	_vec.push_back(regis::Vec(11.98,5.62));
+ 	_vec.push_back(regis::Vec(9.97,2.27));
+ 	_vec.push_back(regis::Vec(3.48,2.39));
 
 // 	043£¬27.39£¬6.21
 // 		044£¬20.57.6.18£¬
@@ -69,15 +69,16 @@ void main(){
 // 		047£¬3.48.2.39
 
 	registration t;
-	//t.extractFLSData(filepath,_vec, 1);
-	t.extractFLS2PCD(filepath, _vec, 5);
+	t.extractFLSData(filepath,_vec, 1);
+	//t.extractFLS2PCD(filepath, _vec, 5);
 	//t.extractCsvData(filepath, _vec);
-// 	t.subsample(0.08);
-// 	t.CalculateFeature(0.05,1,0,0);
+ 	t.subsample(0.04);
+ 	t.CalculateFeature(0.05,1,0,0);
 // 	
 	//t.extractCsvData(filepath, _vec);
 // // 	t.getdatasize();
-  	//t.getRotation2(_vec,5);
+  	t.getRotation_onRender(_vec,5);
+	//t.getRotation2(_vec, 5);
  	//t.octreeTest();
 // // 	Triangulation t;
 // 	for (size_t i=0;i<filepath.size();i++) 

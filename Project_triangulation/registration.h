@@ -5,6 +5,7 @@
 #include <boost/make_shared.hpp>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_representation.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/voxel_grid.h>
@@ -116,11 +117,16 @@ namespace regis {
 	};
 }
 
+
+
 class registration
 {
 public:
 	registration() {
 		p = new pcl::visualization::PCLVisualizer("window");
+		p->createViewPort(0.0, 0, 0.5, 1.0, vp_1);
+		p->createViewPort(0.5, 0, 1.0, 1.0, vp_2);
+		p->spinOnce();
 	};
 	~registration() {
 		data.clear();
@@ -137,9 +143,14 @@ public:
 
 	regis::Point rotatePoint(regis::Point p, regis::Point rotateCenter, double angle);
 
+	PointT_pcl rotatePoint(PointT_pcl p, regis::Point rotateCenter, double angle);
+
 	double getICPerror(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample);
 
 	double getICPerror_OC(std::vector<regis::Point> moveStation, std::vector<regis::Point> refStation, regis::Vec moveS, regis::Vec refS, int sample, const regis::ocTree* moveOC, const regis::ocTree* refOC);
+
+	double getICPerror_KD(const PointCloud::Ptr moveStation, const PointCloud::Ptr refStation, regis::Vec moveS, regis::Vec refS,\
+		int sample, const pcl::KdTreeFLANN<PointT_pcl> refKD);
 
 	double findNearestPoint(regis::Point a, std::vector<regis::Point> ref, double tttt);
 
@@ -151,6 +162,8 @@ public:
 
 	void getRotation2(std::vector < regis::Vec > _vec, double step = 10);  //ÌØÕ÷µã°æ±¾
 	
+	void getRotation_onRender(std::vector < regis::Vec > _vec, double step = 10);
+
 	void getVisableArea();
 
 	void getdatasize();
@@ -167,7 +180,33 @@ public:
 
 	void showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source);
 
+	void showRotateCloudLeft(const std::vector<PointCloud::Ptr> clouds);
+
+	void showCloudsRight(const PointCloudWithNormals::Ptr cloud_target, const PointCloudWithNormals::Ptr cloud_source);
+
+	void showRotateCloudRight(const std::vector<PointCloud::Ptr> clouds);
+
 	std::vector <std::vector<regis::Point>> getFeaturedata(double fea = 0.9, double fea_len = 0);
+
+	void getFeaturedata(std::vector<PointCloud::Ptr> clouds,double fea = 0.9, double fea_len = 0);
+
+	// Returns the rotation matrix around a vector  placed at a point , rotate by angle t  
+	Eigen::Matrix4f rot_mat(const Eigen::Vector3f& point, const Eigen::Vector3f& vector, const float t)
+	{
+		float u = vector(0);
+		float v = vector(1);
+		float w = vector(2);
+		float a = point(0);
+		float b = point(1);
+		float c = point(2);
+
+		Eigen::Matrix4f matrix;
+		matrix << u*u + (v*v + w*w)*cos(t), u*v*(1 - cos(t)) - w*sin(t), u*w*(1 - cos(t)) + v*sin(t), (a*(v*v + w*w) - u*(b*v + c*w))*(1 - cos(t)) + (b*w - c*v)*sin(t),
+			u*v*(1 - cos(t)) + w*sin(t), v*v + (u*u + w*w)*cos(t), v*w*(1 - cos(t)) - u*sin(t), (b*(u*u + w*w) - v*(a*u + c*w))*(1 - cos(t)) + (c*u - a*w)*sin(t),
+			u*w*(1 - cos(t)) - v*sin(t), v*w*(1 - cos(t)) + u*sin(t), w*w + (u*u + v*v)*cos(t), (c*(u*u + v*v) - w*(a*u + b*v))*(1 - cos(t)) + (a*v - b*u)*sin(t),
+			0, 0, 0, 1;
+		return matrix;
+	}
 
 private: 
 	std::vector <std::vector<regis::Point>> data;
