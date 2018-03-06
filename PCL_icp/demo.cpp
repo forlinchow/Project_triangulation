@@ -253,7 +253,7 @@ void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt,
 	pcl::NormalEstimation<PointT, PointNormalT> norm_est;
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
 	norm_est.setSearchMethod(tree);
-	norm_est.setKSearch(30);
+	norm_est.setKSearch(15);
 
 	norm_est.setInputCloud(src);
 	norm_est.setViewPoint(27.419594,6.191127,0.0);
@@ -272,17 +272,17 @@ void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt,
 	float alpha[4] = { 1.0, 1.0, 1.0, 1.0 };
 	point_representation.setRescaleValues(alpha);
 
-	//
+	// 
 	// Align
 	//pcl::IterativeClosestPointNonLinear<PointNormalT, PointNormalT> reg;
 	//pcl::IterativeClosestPointWithNormals<PointNormalT, PointNormalT> reg;
 	pcl::GeneralizedIterativeClosestPoint<PointT, PointT> reg;
 	//pcl::IterativeClosestPoint<PointNormalT, PointNormalT> icp;
-	//reg.setTransformationEpsilon(1e-6);
-//	reg.set
+	reg.setTransformationEpsilon(1e-6);
+	
 	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
 	// Note: adjust this based on the size of your datasets
-	reg.setMaxCorrespondenceDistance(1);
+	reg.setMaxCorrespondenceDistance(2);
 	//reg.setEuclideanFitnessEpsilon(1e-10);
 	//reg.setRANSACIterations(20);
 	//reg.setRANSACOutlierRejectionThreshold(1);
@@ -302,7 +302,7 @@ void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt,
 	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity(), prev, targetToSource;
 	PointCloud::Ptr reg_result = src;
 	//PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
-	reg.setMaximumIterations(2);
+	reg.setMaximumIterations(50);
 	for (int i = 0; i < 30; ++i)
 	{
 		PCL_INFO("Iteration Nr. %d.\n", i);

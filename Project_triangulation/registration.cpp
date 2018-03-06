@@ -146,7 +146,7 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 	data.resize(filename.size());
 	octree.resize(filename.size());
 	boundingBox.resize(filename.size());
-
+	fileName = filename;
 	for (int32_t i = 0; i < filename.size(); i++)
 	{
 		CoInitialize(NULL);
@@ -791,7 +791,7 @@ void registration::getRotation2(std::vector<regis::Vec> _vec, double step)
 	std::cout << "ICP error:" << min_err << std::endl;
 }
 
-void registration::getRotation_onRender(std::vector<regis::Vec> _vec, double step)
+double registration::getRotation_onRender(std::vector<regis::Vec> _vec, double step)
 {
 	//获取特征数据
 	std::vector<PointCloud::Ptr> target_data;
@@ -802,7 +802,7 @@ void registration::getRotation_onRender(std::vector<regis::Vec> _vec, double ste
 	getFeaturedata(target_data, 0.9, 0);
 	std::cout << "特征数据获取完毕. " << std::endl;
 
-	//建立临时八叉树
+	//建立临时kd树
 	std::vector<pcl::KdTreeFLANN<PointT_pcl>> target_octree;
 	target_octree.resize(target_data.size());
 
@@ -864,6 +864,8 @@ void registration::getRotation_onRender(std::vector<regis::Vec> _vec, double ste
 	}
 	std::cout << "best angle: " << min_err_angle << std::endl;
 	std::cout << "ICP error:" << min_err << std::endl;
+
+	return min_err_angle;
 }
 
 void registration::getVisableArea()
@@ -880,6 +882,7 @@ void registration::getdatasize()
 
 void registration::subsample(double subDis)
 {	
+	subdata_ind.clear();
 	for (int i=0;i<data.size();i++)
 	{
 		std::vector<uint32_t> ind;
@@ -1031,6 +1034,63 @@ void registration::writefileTest()
 	
 }
 
+void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
+{
+	//预处理
+	subsample(0.002);
+	std::vector < Eigen::Matrix4f> final_matrix;
+	final_matrix.resize(data.size());
+
+	//获取特征数据
+	std::vector<PointCloud::Ptr> target_data;
+	for (int i = 0; i < data.size(); i++)
+	{
+		target_data.push_back(PointCloud::Ptr(new PointCloud));
+	}
+	getFeaturedata(target_data, 0.9, 0);
+	std::cout << "特征数据获取完毕. " << std::endl;
+
+	//旋转点云
+	for (size_t j = 0; j < target_data.size(); j++)
+	{
+		final_matrix[j] = rot_mat(Eigen::Vector3f(_vec[j].x, _vec[j].y, 0), Eigen::Vector3f(0, 0, 1), ang / 180 * M_PI);
+		pcl::transformPointCloud(*target_data[j], *target_data[j], final_matrix[j]);
+// 		for (size_t k = 0; k < target_data[j]->points.size(); k++)
+// 		{
+//			target_data[j]->points[k] = rotatePoint(target_data[j]->points[k], regis::Point(_vec[j].x, _vec[j].y, 0), ang);
+// 		}
+	}
+	
+	std::cout << "旋转点云完毕." << std::endl;
+	showRotateCloudLeft(target_data);
+
+	std::cout << "进行迭代." << std::endl;
+	PointCloud::Ptr result(new PointCloud);
+	Eigen::Matrix4f transMat;
+	for (size_t i = 0; i < target_data.size()-1; i++)
+	{
+		pairAlign(target_data[i], target_data[i + 1], result, transMat, true);
+		pcl::transformPointCloud(*target_data[i + 1], *target_data[i + 1], transMat);
+		final_matrix[i + 1] = transMat * final_matrix[i + 1];
+	}
+
+	//加入平移矩阵
+	std::vector<Eigen::Matrix4f> shift_matrix;
+	shift_matrix.resize(final_matrix.size());
+	for (int i = 0; i < shift_matrix.size(); i++)
+	{
+		shift_matrix[i] << 1, 0, 0, _vec[i].x,
+			0, 1, 0, _vec[i].y,
+			0, 0, 1, 0,
+			0, 0, 0, 1;
+
+		final_matrix[i] = final_matrix[i]*shift_matrix[i];
+	}
+
+	exportpose(final_matrix, fileName);
+	showRotateCloudLeft(target_data);
+}
+
 void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f & final_transform, bool downsample)
 {
 	PointCloud::Ptr src(new PointCloud);
@@ -1039,7 +1099,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	pcl::VoxelGrid<PointT_pcl> grid;
 	if (downsample)
 	{
-		grid.setLeafSize(0.03, 0.03, 0.01);
+		grid.setLeafSize(0.1, 0.1, 0.05);
 		grid.setInputCloud(cloud_src);
 		grid.filter(*src);
 
@@ -1052,25 +1112,24 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 		tgt = cloud_tgt;
 	}
 
-
 	// Compute surface normals and curvature
-	PointCloudWithNormals::Ptr points_with_normals_src(new PointCloudWithNormals);
-	PointCloudWithNormals::Ptr points_with_normals_tgt(new PointCloudWithNormals);
-
-	pcl::NormalEstimation<PointT_pcl, PointNormalT> norm_est;
-	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
-	norm_est.setSearchMethod(tree);
-	norm_est.setKSearch(30);
-
-	norm_est.setInputCloud(src);
-	norm_est.setViewPoint(27.419594, 6.191127, 0.0);
-	norm_est.compute(*points_with_normals_src);
-	pcl::copyPointCloud(*src, *points_with_normals_src);
-
-	norm_est.setInputCloud(tgt);
-	norm_est.setViewPoint(20.608019, 6.209724, 0.0);
-	norm_est.compute(*points_with_normals_tgt);
-	pcl::copyPointCloud(*tgt, *points_with_normals_tgt);
+// 	PointCloudWithNormals::Ptr points_with_normals_src(new PointCloudWithNormals);
+// 	PointCloudWithNormals::Ptr points_with_normals_tgt(new PointCloudWithNormals);
+// 
+// 	pcl::NormalEstimation<PointT_pcl, PointNormalT> norm_est;
+// 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+// 	norm_est.setSearchMethod(tree);
+// 	norm_est.setKSearch(15);
+// 
+// 	norm_est.setInputCloud(src);
+// 	norm_est.setViewPoint(27.419594, 6.191127, 0.0);
+// 	norm_est.compute(*points_with_normals_src);
+// 	pcl::copyPointCloud(*src, *points_with_normals_src);
+// 
+// 	norm_est.setInputCloud(tgt);
+// 	norm_est.setViewPoint(20.608019, 6.209724, 0.0);
+// 	norm_est.compute(*points_with_normals_tgt);
+// 	pcl::copyPointCloud(*tgt, *points_with_normals_tgt);
 
 	//
 	// Instantiate our custom point representation (defined above) ...
@@ -1079,7 +1138,6 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	float alpha[4] = { 1.0, 1.0, 1.0, 1.0 };
 	point_representation.setRescaleValues(alpha);
 
-	//
 	// Align
 	//pcl::IterativeClosestPointNonLinear<PointNormalT, PointNormalT> reg;
 	//pcl::IterativeClosestPointWithNormals<PointNormalT, PointNormalT> reg;
@@ -1089,7 +1147,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 
 	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
 	// Note: adjust this based on the size of your datasets
-	reg.setMaxCorrespondenceDistance(0.1);
+	reg.setMaxCorrespondenceDistance(1);
 	//reg.setEuclideanFitnessEpsilon(1e-10);
 	//reg.setRANSACIterations(20);
 	//reg.setRANSACOutlierRejectionThreshold(1);
@@ -1109,12 +1167,11 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity(), prev, targetToSource;
 	PointCloud::Ptr reg_result = src;
 	//PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
-	reg.setMaximumIterations(100);
+	reg.setMaximumIterations(30);
 	for (int i = 0; i < 30; ++i)
 	{
 		PCL_INFO("Iteration Nr. %d.\n", i);
 		//cout << reg.getFinalTransformation() << endl;
-
 
 		// save cloud for visualization purpose
 		src = reg_result;
@@ -1251,7 +1308,7 @@ void registration::getFeaturedata(std::vector<PointCloud::Ptr> tPtr, double fea,
 	{
 		for (int j = 0; j < subdata_ind[i].size(); j++)
 		{
-			if (pointFeature[i][subdata_ind[i][j]].zChannel > fea)
+			if (pointFeature[i][subdata_ind[i][j]].zChannel > fea && pointFeature[i][subdata_ind[i][j]].zlength > fea_len)
 			{
 				tPtr[i]->push_back(PointT_pcl(data[i][subdata_ind[i][j]].x, \
 					data[i][subdata_ind[i][j]].y, data[i][subdata_ind[i][j]].z));
@@ -1260,6 +1317,24 @@ void registration::getFeaturedata(std::vector<PointCloud::Ptr> tPtr, double fea,
 		std::cout << "特征数据 " << i << "大小为:" << tPtr[i]->size() << std::endl;
 	}
 	showRotateCloudLeft(tPtr);
+}
+
+void registration::exportpose(std::vector<Eigen::Matrix4f> mat, std::vector<std::string> name)
+{
+	for (int i=0;i<name.size();i++)
+	{
+		FILE* file = fopen((name[i].append(".pose")).c_str(), "w");
+		fprintf(file, "<?xml version='1.0' encoding='utf-8'?>\n");
+		fprintf(file, "<Pose Version=\"3.2.1.584\">\n");
+		fprintf(file, "    <Matrix4x4 RowOrder=\"%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\"\n",
+			mat[i](0, 0), mat[i](0, 1), mat[i](0, 2), mat[i](0, 3),
+			mat[i](1, 0), mat[i](1, 1), mat[i](1, 2), mat[i](1, 3),
+			mat[i](2, 0), mat[i](2, 1), mat[i](2, 2), mat[i](2, 3),
+			mat[i](3, 0), mat[i](3, 1), mat[i](3, 2), mat[i](3, 3));
+		fprintf(file, "    <Offset X=\"0\" Y=\"0\" Z=\"0\"/>\n");
+		fprintf(file, "</Pose>");
+		fclose(file);
+	}
 }
 
 

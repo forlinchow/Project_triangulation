@@ -162,7 +162,7 @@ public:
 
 	void getRotation2(std::vector < regis::Vec > _vec, double step = 10);  //ÌØÕ÷µã°æ±¾
 	
-	void getRotation_onRender(std::vector < regis::Vec > _vec, double step = 10);
+	double getRotation_onRender(std::vector < regis::Vec > _vec, double step = 10);
 
 	void getVisableArea();
 
@@ -175,6 +175,8 @@ public:
 	void octreeTest();
 
 	void writefileTest();
+
+	void AlignClouds(double ang, std::vector<regis::Vec> _vec);
 
 	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false);
 
@@ -200,15 +202,28 @@ public:
 		float b = point(1);
 		float c = point(2);
 
-		Eigen::Matrix4f matrix;
-		matrix << u*u + (v*v + w*w)*cos(t), u*v*(1 - cos(t)) - w*sin(t), u*w*(1 - cos(t)) + v*sin(t), (a*(v*v + w*w) - u*(b*v + c*w))*(1 - cos(t)) + (b*w - c*v)*sin(t),
-			u*v*(1 - cos(t)) + w*sin(t), v*v + (u*u + w*w)*cos(t), v*w*(1 - cos(t)) - u*sin(t), (b*(u*u + w*w) - v*(a*u + c*w))*(1 - cos(t)) + (c*u - a*w)*sin(t),
-			u*w*(1 - cos(t)) - v*sin(t), v*w*(1 - cos(t)) + u*sin(t), w*w + (u*u + v*v)*cos(t), (c*(u*u + v*v) - w*(a*u + b*v))*(1 - cos(t)) + (a*v - b*u)*sin(t),
+		Eigen::Matrix4f matrix1,matrix2,matrix3;
+		matrix1 << 1, 0, 0, -a,
+			0, 1, 0, -b,
+			0, 0, 1, -c,
 			0, 0, 0, 1;
-		return matrix;
+
+		matrix2(0, 0) = u*u*(1 - cos(t)) + cos(t); matrix2(1, 0) = u*v*(1 - cos(t)) + w*sin(t); matrix2(2, 0) = u*w*(1 - cos(t)) - v*sin(t); matrix2(3, 0) = 0;
+		matrix2(0, 1) = u*v*(1 - cos(t)) - w*sin(t); matrix2(1, 1) = v*v*(1 - cos(t)) + cos(t); matrix2(2, 1) = v*w*(1 - cos(t)) + u*sin(t); matrix2(3, 1) = 0;
+		matrix2(0, 2) = u*w*(1 - cos(t)) + v*sin(t); matrix2(1, 2) = v*w*(1 - cos(t)) - u*sin(t); matrix2(2, 2) = w*w*(1 - cos(t)) + cos(t); matrix2(3, 2) = 0;
+		matrix2(0, 3) = 0; matrix2(1, 3) = 0; matrix2(2, 3) = 0;matrix2(3,3)=1;
+		
+		matrix3 << 1, 0, 0, a,
+			0, 1, 0, b,
+			0, 0, 1, c,
+			0, 0, 0, 1;
+
+		return matrix3*matrix2*matrix1;
 	}
 
+	void exportpose(std::vector<Eigen::Matrix4f> mat,std::vector<std::string> name);
 private: 
+	std::vector < std::string> fileName;
 	std::vector <std::vector<regis::Point>> data;
 	std::vector <std::vector<regis::Feature>> pointFeature;
 	std::vector<regis::ocTree> octree;

@@ -77,7 +77,9 @@ void main(){
 // 	
 	//t.extractCsvData(filepath, _vec);
 // // 	t.getdatasize();
-  	t.getRotation_onRender(_vec,5);
+  	double ang=t.getRotation_onRender(_vec,5);
+
+	t.AlignClouds(ang,_vec);
 	//t.getRotation2(_vec, 5);
  	//t.octreeTest();
 // // 	Triangulation t;
