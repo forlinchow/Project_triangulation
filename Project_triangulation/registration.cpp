@@ -988,6 +988,11 @@ void registration::CalculateFeature(double ocDis, bool x_bool, bool y_bool, bool
 	}
 }
 
+void registration::CalculateNormals()
+{
+
+}
+
 void registration::octreeTest(){
 // 	std::cout << "Example 1: Searching radius neighbors with default access by public x,y,z variables." << std::endl;
 // 	std::cout << "// radiusNeighbors returns indexes to neighboring points." << std::endl;
@@ -1036,44 +1041,72 @@ void registration::writefileTest()
 
 void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 {
-	//预处理
-	subsample(0.002);
+	//最终变换矩阵，输出用
 	std::vector < Eigen::Matrix4f> final_matrix;
 	final_matrix.resize(data.size());
+	//旋转矩阵
+	std::vector < Eigen::Matrix4f> rot_matrix;
+	rot_matrix.resize(data.size());
 
+	std::cout << "第一次拼接" << std::endl;
+	//预处理，抽稀
+	subsample(0.1);
 	//获取特征数据
 	std::vector<PointCloud::Ptr> target_data;
 	for (int i = 0; i < data.size(); i++)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
-	getFeaturedata(target_data, 0.9, 0);
+	getFeaturedata(target_data, 0, 0);
 	std::cout << "特征数据获取完毕. " << std::endl;
-
-	//旋转点云
+	//旋转点云,并初次记录旋转矩阵
 	for (size_t j = 0; j < target_data.size(); j++)
 	{
-		final_matrix[j] = rot_mat(Eigen::Vector3f(_vec[j].x, _vec[j].y, 0), Eigen::Vector3f(0, 0, 1), ang / 180 * M_PI);
-		pcl::transformPointCloud(*target_data[j], *target_data[j], final_matrix[j]);
-// 		for (size_t k = 0; k < target_data[j]->points.size(); k++)
-// 		{
-//			target_data[j]->points[k] = rotatePoint(target_data[j]->points[k], regis::Point(_vec[j].x, _vec[j].y, 0), ang);
-// 		}
+		rot_matrix[j] = rot_mat(Eigen::Vector3f(_vec[j].x, _vec[j].y, 0), Eigen::Vector3f(0, 0, 1), ang / 180 * M_PI);
+		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
 	}
-	
 	std::cout << "旋转点云完毕." << std::endl;
-	showRotateCloudLeft(target_data);
-
-	std::cout << "进行迭代." << std::endl;
+	std::cout << "进行初次迭代." << std::endl;
 	PointCloud::Ptr result(new PointCloud);
 	Eigen::Matrix4f transMat;
+	for (size_t i = 0; i < target_data.size() - 1; i++)
+	{
+		pairAlign(target_data[i], target_data[i + 1], result, transMat,0.5, true,0.1);
+		pcl::transformPointCloud(*target_data[i + 1], *target_data[i + 1], transMat);
+		final_matrix[i + 1] = transMat;
+	}
+	std::cout << "初次迭代结束，按q继续精拼." << std::endl;
+	showRotateCloudLeft(target_data);
+
+	std::cout << "进行第二次迭代." << std::endl;
+	//预处理，抽稀
+	subsample(0.001);
+	//获取特征数据
+	target_data.clear();
+	for (int i = 0; i < data.size(); i++)
+	{
+		target_data.push_back(PointCloud::Ptr(new PointCloud));
+	}
+	getFeaturedata(target_data, 0.95,1);
+	std::cout << "特征数据获取完毕. " << std::endl;
+	//旋转点云，并加入第一次粗拼结果
+	for (size_t j = 0; j < target_data.size(); j++)
+	{
+		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
+		if (j!=0)
+		{
+			pcl::transformPointCloud(*target_data[j], *target_data[j],final_matrix[j]);
+		}
+	}
+	std::cout << "旋转点云&第一次结果还原完毕." << std::endl;
+	std::cout << "进行第二次迭代." << std::endl;
 	for (size_t i = 0; i < target_data.size()-1; i++)
 	{
-		pairAlign(target_data[i], target_data[i + 1], result, transMat, true);
+		pairAlign(target_data[i], target_data[i + 1], result, transMat,0.05,true,0.01);
 		pcl::transformPointCloud(*target_data[i + 1], *target_data[i + 1], transMat);
 		final_matrix[i + 1] = transMat * final_matrix[i + 1];
 	}
-
+	std::cout << "第二次迭代完毕." << std::endl;
 	//加入平移矩阵
 	std::vector<Eigen::Matrix4f> shift_matrix;
 	shift_matrix.resize(final_matrix.size());
@@ -1083,15 +1116,20 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 			0, 1, 0, _vec[i].y,
 			0, 0, 1, 0,
 			0, 0, 0, 1;
-
-		final_matrix[i] = final_matrix[i]*shift_matrix[i];
+		if (i==0){
+			final_matrix[i] = rot_matrix[i] * shift_matrix[i];
+		}
+		else {
+			final_matrix[i] = final_matrix[i] * rot_matrix[i]*shift_matrix[i];
+		}
+		
 	}
 
 	exportpose(final_matrix, fileName);
 	showRotateCloudLeft(target_data);
 }
 
-void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f & final_transform, bool downsample)
+void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f & final_transform,double co_dis, bool downsample,double leaf_size)
 {
 	PointCloud::Ptr src(new PointCloud);
 	PointCloud::Ptr tgt(new PointCloud);
@@ -1099,7 +1137,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	pcl::VoxelGrid<PointT_pcl> grid;
 	if (downsample)
 	{
-		grid.setLeafSize(0.1, 0.1, 0.05);
+		grid.setLeafSize(leaf_size, leaf_size, leaf_size);
 		grid.setInputCloud(cloud_src);
 		grid.filter(*src);
 
@@ -1147,7 +1185,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 
 	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
 	// Note: adjust this based on the size of your datasets
-	reg.setMaxCorrespondenceDistance(1);
+	reg.setMaxCorrespondenceDistance(co_dis);
 	//reg.setEuclideanFitnessEpsilon(1e-10);
 	//reg.setRANSACIterations(20);
 	//reg.setRANSACOutlierRejectionThreshold(1);

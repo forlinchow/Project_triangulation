@@ -172,13 +172,15 @@ public:
 
 	void CalculateFeature(double ocDis,bool x_bool=1 ,bool y_bool = 1,bool z_bool = 1);
 
-	void octreeTest();
+	void CalculateNormals();
+
+	void octreeTest(); 
 
 	void writefileTest();
 
 	void AlignClouds(double ang, std::vector<regis::Vec> _vec);
 
-	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false);
+	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform,double co_dis=0.1, bool downsample = false, double leaf_size = 0.1);
 
 	void showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source);
 
@@ -223,7 +225,7 @@ public:
 
 	void exportpose(std::vector<Eigen::Matrix4f> mat,std::vector<std::string> name);
 private: 
-	std::vector < std::string> fileName;
+	std::vector <std::string> fileName;
 	std::vector <std::vector<regis::Point>> data;
 	std::vector <std::vector<regis::Feature>> pointFeature;
 	std::vector<regis::ocTree> octree;
