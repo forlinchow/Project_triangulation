@@ -1,6 +1,5 @@
 #include "registration.h"
 
-
 void main(){
 // 	HANDLE main_Mutex = CreateMutex(NULL,false,NULL);
 // 	
@@ -69,17 +68,18 @@ void main(){
 // 		047£¬3.48.2.39
 
 	registration t;
-	t.extractFLSData(filepath,_vec, 1);
-	//t.extractFLS2PCD(filepath, _vec, 5);
+	//t.extractFLSData(filepath,_vec, 1);
+	t.extractFLS2PCD(filepath, _vec, 1);
+	t.CalculateNormals(_vec);
 	//t.extractCsvData(filepath, _vec);
- 	t.subsample(0.04);
- 	t.CalculateFeature(0.05,1,0,0);
+ 	//t.subsample(0.04);
+ 	//t.CalculateFeature(0.05,1,0,0);
 // 	
 	//t.extractCsvData(filepath, _vec);
 // // 	t.getdatasize();
-  	double ang=t.getRotation_onRender(_vec,5);
+  	//double ang=t.getRotation_onRender(_vec,5);
 
-	t.AlignClouds(ang,_vec);
+	//t.AlignClouds(ang,_vec);
 	//t.getRotation2(_vec, 5);
  	//t.octreeTest();
 // // 	Triangulation t;
