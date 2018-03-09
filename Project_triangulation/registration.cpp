@@ -1034,11 +1034,12 @@ void registration::CalculateNormals(std::vector<regis::Vec> _vec)
 // 	//PointCloudColorHandlerCustom<PointT_pcl> src_h(pcddata[1], 255, 0, 0);
  	p->addPointCloud(pcddata[0], tgt_h, "l1", vp_1);
 // 	//p->addPointCloud(pcddata[1], src_h, "l2", vp_1);
-
+	 
 	//p->addPointCloudNormals < PointT_pcl, pcl::Normal> (constPCD, constNormal,10,0.02,"l2",vp_1);
 	p->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "l1", vp_1);
  	p->addPointCloudNormals<PointT_pcl,pcl::Normal>(pcddata[0],nor[0],10,0.2,"normals",vp_1);
 // 
+	
  	p->spin();
  }
 
