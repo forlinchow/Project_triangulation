@@ -10,9 +10,10 @@
 using pcl::visualization::PointCloudColorHandlerGenericField;
 using pcl::visualization::PointCloudColorHandlerCustom;
 
+template<class PointT>
 DWORD WINAPI readFLS(LPVOID lpParameter) {
 	CoInitialize(NULL);
-		regis::threadParam* t = (regis::threadParam*)lpParameter;
+		regis::threadParam<PointT>* t = (regis::threadParam<PointT>*)lpParameter;
 
 		// 以下liscence需要整段输入，key放入liscence key
 		BSTR licenseCode =
@@ -53,7 +54,7 @@ DWORD WINAPI readFLS(LPVOID lpParameter) {
 		R[2][1] = y * z * (1 - ca) + x * sa;
 		R[2][2] = z * z * (1 - ca) + ca;
 
-		std::vector<regis::Point> temp;
+		std::vector<PointT> temp;
 		for (int col = 0; col < cols; col = col + t->scale)
 		{
 			for (int row = 0; row < rows; row = row + t->scale) {
@@ -63,7 +64,7 @@ DWORD WINAPI readFLS(LPVOID lpParameter) {
 					continue;
 				}
 				//temp.push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0], x*R[0][1] + y*R[1][1] + z*R[2][1], x*R[0][2] + y*R[1][2] + z*R[2][2]));
-				temp.push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0] + t->offset.x, x*R[0][1] + y*R[1][1] + z*R[2][1] + t->offset.y, x*R[0][2] + y*R[1][2] + z*R[2][2]));
+				temp.push_back(PointT(x*R[0][0] + y*R[1][0] + z*R[2][0] + t->offset.x, x*R[0][1] + y*R[1][1] + z*R[2][1] + t->offset.y, x*R[0][2] + y*R[1][2] + z*R[2][2]));
 			}
 		}
 
@@ -103,20 +104,21 @@ DWORD WINAPI Thr2ed_findNearest(LPVOID lpParameter) {
 	return 0L;
 }
 
-void registration::extractData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale)
+template<class PointT>
+void registration::extractData(std::vector<PointT> pCloud,std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale)
 {
 	CoInitialize(NULL);
 	std::vector<HANDLE> pth;
-	data.resize(filename.size());
+	pCloud.resize(filename.size());
 	octree.resize(filename.size());
-	std::vector<regis::threadParam> _param;
+	std::vector<regis::threadParam<PointT>> _param;
 
 	for (int i = 0; i < filename.size(); i++)
 	{
-		regis::threadParam tParam;
+		regis::threadParam<PointT> tParam;
 		tParam.scale = scale;
 		tParam.filepath = filename[i];
-		tParam.ptCloud = &(data[i]);
+		tParam.ptCloud = &(pCloud[i]);
 		tParam.octree = &(octree[i]);
 		tParam._mutex = &_mutex;
 		tParam.offset = _vec[i];
@@ -205,7 +207,7 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 				yy = x*R[0][1] + y*R[1][1] + z*R[2][1];
 				zz = x*R[0][2] + y*R[1][2] + z*R[2][2];
 
-				if (xx*xx+yy*yy+zz*zz>225)
+				if (xx*xx+yy*yy+zz*zz>100)
 				{
 					continue;
 				}
@@ -842,14 +844,39 @@ double registration::getRotation_onRender(std::vector<regis::Vec> _vec, double s
 
 		std::cout << "calculate ICP error " << std::endl;  
 		//计算最近点误差
+		//办公室版本
+// 		res += getICPerror_KD(target_data[0], target_data[1], _vec[0], _vec[1], 1000, target_octree[1]);
+// 		std::cout << "Station 0-1 " << "ICP error:" << res << std::endl;
+// 		res += getICPerror_KD(target_data[1], target_data[2], _vec[1], _vec[2], 1000,target_octree[2]);
+// 		std::cout << "Station 1-2 " << "ICP error:" << res << std::endl;
+// 		res += getICPerror_KD(target_data[2], target_data[3], _vec[2], _vec[3], 1000,target_octree[3]);
+// 		std::cout << "Station 2-3 " << "ICP error:" << res << std::endl;
+// 		res += getICPerror_KD(target_data[3], target_data[4], _vec[3], _vec[4], 1000,target_octree[4]);
+// 		std::cout << "Station 3-4 " << "ICP error:" << res << std::endl;
+
+		//宝岗大道版本
 		res += getICPerror_KD(target_data[0], target_data[1], _vec[0], _vec[1], 1000, target_octree[1]);
 		std::cout << "Station 0-1 " << "ICP error:" << res << std::endl;
-		res += getICPerror_KD(target_data[1], target_data[2], _vec[1], _vec[2], 1000,target_octree[2]);
+		res += getICPerror_KD(target_data[1], target_data[2], _vec[1], _vec[2], 1000, target_octree[2]);
 		std::cout << "Station 1-2 " << "ICP error:" << res << std::endl;
-		res += getICPerror_KD(target_data[2], target_data[3], _vec[2], _vec[3], 1000,target_octree[3]);
+		res += getICPerror_KD(target_data[1], target_data[3], _vec[1], _vec[3], 1000, target_octree[3]);
 		std::cout << "Station 2-3 " << "ICP error:" << res << std::endl;
-		res += getICPerror_KD(target_data[3], target_data[4], _vec[3], _vec[4], 1000,target_octree[4]);
+		res += getICPerror_KD(target_data[3], target_data[4], _vec[3], _vec[4], 1000, target_octree[4]);
 		std::cout << "Station 3-4 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[4], target_data[5], _vec[4], _vec[5], 1000, target_octree[5]);
+		std::cout << "Station 4-5 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[5], target_data[6], _vec[5], _vec[6], 1000, target_octree[6]);
+		std::cout << "Station 5-6 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[5], target_data[11], _vec[5], _vec[11], 1000, target_octree[11]);
+		std::cout << "Station 5-11 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[6], target_data[7], _vec[6], _vec[7], 1000, target_octree[7]);
+		std::cout << "Station 6-7 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[6], target_data[8], _vec[6], _vec[8], 1000, target_octree[8]);
+		std::cout << "Station 6-8 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[8], target_data[9], _vec[8], _vec[9], 1000, target_octree[9]);
+		std::cout << "Station 8-9 " << "ICP error:" << res << std::endl;
+		res += getICPerror_KD(target_data[9], target_data[10], _vec[9], _vec[10], 1000, target_octree[10]);
+		std::cout << "Station 9-10 " << "ICP error:" << res << std::endl;
 
 		std::cout << "iterator: " << i << " ,ICP error:" << res << std::endl;
 
@@ -1071,40 +1098,107 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 	Eigen::Matrix4f transMat;
 	for (size_t i = 0; i < target_data.size() - 1; i++)
 	{
-		pairAlign(target_data[i], target_data[i + 1], result, transMat,0.5, true,0.1);
-		pcl::transformPointCloud(*target_data[i + 1], *target_data[i + 1], transMat);
-		final_matrix[i + 1] = transMat;
+		int ref,movef;
+		switch (i)
+		{
+		case 0:
+			ref = 0,movef = 1;
+		case 1:
+			ref = 1, movef = 2;
+		case 2:
+			ref = 1,movef = 3;
+		case 3:
+			ref = 3, movef = 4;
+		case 4:
+			ref = 4, movef = 5;
+		case 5:
+			ref = 5, movef = 11;
+		case 6:
+			ref = 5, movef = 6;
+		case 7:
+			ref = 6, movef = 8;
+		case 8:
+			ref = 6, movef =7;
+		case 9:
+			ref = 8, movef = 9;
+		case 10:
+			ref = 9, movef = 10;
+		default:
+			break;
+		}
+
+		pairAlign(target_data[ref], target_data[movef], result, transMat,0.5, true,0.1);
+		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
+		final_matrix[movef] = transMat;
 	}
 	std::cout << "初次迭代结束，按q继续精拼." << std::endl;
 	showRotateCloudLeft(target_data);
 
 	std::cout << "进行第二次迭代." << std::endl;
 	//预处理，抽稀
-	subsample(0.001);
+	subsample(0.004);
 	//获取特征数据
+	std::vector<PointCloud::Ptr> downsample_data;
+	downsample_data.clear();
 	target_data.clear();
 	for (int i = 0; i < data.size(); i++)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
+		downsample_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
 	getFeaturedata(target_data, 0.95,1);
+
+	subsample(0.03);
+	getFeaturedata(downsample_data, 0.95, 1);
+
 	std::cout << "特征数据获取完毕. " << std::endl;
 	//旋转点云，并加入第一次粗拼结果
 	for (size_t j = 0; j < target_data.size(); j++)
 	{
 		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
+		pcl::transformPointCloud(*downsample_data[j], *downsample_data[j], rot_matrix[j]);
 		if (j!=0)
 		{
 			pcl::transformPointCloud(*target_data[j], *target_data[j],final_matrix[j]);
+			pcl::transformPointCloud(*downsample_data[j], *downsample_data[j], final_matrix[j]);
 		}
 	}
 	std::cout << "旋转点云&第一次结果还原完毕." << std::endl;
 	std::cout << "进行第二次迭代." << std::endl;
 	for (size_t i = 0; i < target_data.size()-1; i++)
 	{
-		pairAlign(target_data[i], target_data[i + 1], result, transMat,0.05,true,0.01);
-		pcl::transformPointCloud(*target_data[i + 1], *target_data[i + 1], transMat);
-		final_matrix[i + 1] = transMat * final_matrix[i + 1];
+		int ref, movef;
+		switch (i)
+		{
+		case 0:
+			ref = 0, movef = 1;
+		case 1:
+			ref = 1, movef = 2;
+		case 2:
+			ref = 1, movef = 3;
+		case 3:
+			ref = 3, movef = 4;
+		case 4:
+			ref = 4, movef = 5;
+		case 5:
+			ref = 5, movef = 11;
+		case 6:
+			ref = 5, movef = 6;
+		case 7:
+			ref = 6, movef = 8;
+		case 8:
+			ref = 6, movef = 7;
+		case 9:
+			ref = 8, movef = 9;
+		case 10:
+			ref = 9, movef = 10;
+		default:
+			break;
+		}
+
+		pairAlign(target_data[ref], downsample_data[movef], result, transMat,0.5,false);
+		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
+		final_matrix[movef] = transMat * final_matrix[movef];
 	}
 	std::cout << "第二次迭代完毕." << std::endl;
 	//加入平移矩阵
@@ -1141,6 +1235,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 		grid.setInputCloud(cloud_src);
 		grid.filter(*src);
 
+		//tgt = cloud_tgt;
 		grid.setInputCloud(cloud_tgt);
 		grid.filter(*tgt);
 	}

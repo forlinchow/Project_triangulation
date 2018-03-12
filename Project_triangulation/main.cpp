@@ -43,12 +43,25 @@ void main(){
 // 	filepath.push_back(std::string("Gd_zh_171022_045 - Cloud.csv"));
 // 	filepath.push_back(std::string("Gd_zh_171022_046 - Cloud.csv"));
 // 	filepath.push_back(std::string("Gd_zh_171022_047 - Cloud.csv"));
-	filepath.push_back(std::string("Gd_zh_171022_043.fls"));
- 	filepath.push_back(std::string("Gd_zh_171022_044.fls"));
- 	filepath.push_back(std::string("Gd_zh_171022_045.fls"));
-	filepath.push_back(std::string("Gd_zh_171022_046.fls"));
- 	filepath.push_back(std::string("Gd_zh_171022_047.fls"));
+// 	filepath.push_back(std::string("Gd_zh_171022_043.fls"));
+//  	filepath.push_back(std::string("Gd_zh_171022_044.fls"));
+//  	filepath.push_back(std::string("Gd_zh_171022_045.fls"));
+// 	filepath.push_back(std::string("Gd_zh_171022_046.fls"));
+//  	filepath.push_back(std::string("Gd_zh_171022_047.fls"));
 
+	//宝岗大道数据
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_011.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_012.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_013.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_024.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_014.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_025.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_016.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_017.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_018.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_019.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_020.fls"));
+	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_015.fls"));
 
 // 	filepath.push_back(std::string("43z.csv"));
 // 	filepath.push_back(std::string("44z.csv"));
@@ -56,11 +69,26 @@ void main(){
 
 
 	std::vector < regis::Vec > _vec;
-	_vec.push_back(regis::Vec(27.39,6.21));
-	_vec.push_back(regis::Vec(20.57,6.18));
-	_vec.push_back(regis::Vec(11.98,5.62));
- 	_vec.push_back(regis::Vec(9.97,2.27));
- 	_vec.push_back(regis::Vec(3.48,2.39));
+// 	_vec.push_back(regis::Vec(27.39,6.21));
+// 	_vec.push_back(regis::Vec(20.57,6.18));
+// 	_vec.push_back(regis::Vec(11.98,5.62));
+//  	_vec.push_back(regis::Vec(9.97,2.27));
+//  	_vec.push_back(regis::Vec(3.48,2.39));
+
+	//宝岗大道数据
+	_vec.push_back(regis::Vec(5.20,10.13 ));
+	_vec.push_back(regis::Vec(4.86,8.59 ));
+	_vec.push_back(regis::Vec(3.49,8.51 ));
+	_vec.push_back(regis::Vec(7.09,7.75 ));
+	_vec.push_back(regis::Vec(6.39,5.38 ));
+	_vec.push_back(regis::Vec(6.82,4.78 ));
+	_vec.push_back(regis::Vec(4.12,4.12 ));
+	_vec.push_back(regis::Vec(2.99,4.16 ));
+	_vec.push_back(regis::Vec(4.09,1.92 ));
+	_vec.push_back(regis::Vec(1.99,2.04 ));
+	_vec.push_back(regis::Vec(1.45,2.26 ));
+	_vec.push_back(regis::Vec(6.25,2.91 ));
+
 
 // 	043，27.39，6.21
 // 		044，20.57.6.18，

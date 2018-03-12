@@ -94,9 +94,10 @@ namespace regis {
 		Vec(double a,double b):x(a),y(b){}
 	};
 
+	template<class PointT>
 	struct threadParam
 	{
-		std::vector<regis::Point>* ptCloud;
+		std::vector<PointT>* ptCloud;
 		ocTree* octree;
 		std::string filepath;
 		regis::Vec offset;
@@ -132,8 +133,11 @@ public:
 		data.clear();
 	}
 	;
+	
+	template<class PointT>
+	void extractData(std::vector<PointT> pCloud, std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
 
-	void extractData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
+	//void extractFLS2PCD_parellel(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);   //多线程版本
 
 	void extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1 );
 
