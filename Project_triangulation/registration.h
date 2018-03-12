@@ -3,10 +3,12 @@
 #include "Octree.hpp"
 #include <pcl/point_cloud.h>
 #include <boost/make_shared.hpp>
+#include <boost/thread/thread.hpp>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_representation.h>
+#include <pcl/common/common_headers.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
@@ -19,8 +21,12 @@
 //#include <pcl/registration>
 #include <pcl/registration/transforms.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/cloud_viewer.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <vtkAutoInit.h>
+VTK_MODULE_INIT(vtkRenderingOpenGL);
+
 #import "iQOpen.dll" no_namespace
 #define PI 3.14159265f
 
@@ -176,7 +182,7 @@ public:
 
 	void CalculateFeature(double ocDis,bool x_bool=1 ,bool y_bool = 1,bool z_bool = 1);
 
-	void CalculateNormals();
+	void CalculateNormals(std::vector<regis::Vec> _vec);
 
 	void octreeTest(); 
 
@@ -232,6 +238,7 @@ private:
 	std::vector <std::string> fileName;
 	std::vector <std::vector<regis::Point>> data;
 	std::vector <std::vector<regis::Feature>> pointFeature;
+	std::vector<float> faro_altitude;
 	std::vector<regis::ocTree> octree;
 	std::vector<regis::Box> boundingBox;
 

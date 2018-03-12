@@ -315,7 +315,8 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 		R[2][1] = y * z * (1 - ca) + x * sa;
 		R[2][2] = z * z * (1 - ca) + ca;
 
-		double minx = 0, miny = 0, minz = 0, maxx = 0, maxy = 0, maxz = 0;
+		double minx = 0, miny = 0, minz = 0, maxx = 0, maxy = 0, maxz = 0,device_high=0;
+		int highcount = 0;
 		for (int col = 0; col < cols; col = col + scale)
 		{
 			for (int row = 0; row < rows; row = row + scale) {
@@ -335,6 +336,15 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 					continue;
 				}
 
+				//计算仪器高
+				if (row == rows - 1)
+				{
+					highcount++;
+					device_high += std::pow(xx*xx + yy*yy, 0.5)*std::tan(M_PI/3.0);
+					std::cout << std::pow(xx*xx + yy*yy, 0.5)*std::tan(M_PI / 3.0) << std::endl;
+				}
+
+				//平移处理
 				xx += _vec[i].x;
 				yy += _vec[i].y;
 
@@ -363,6 +373,8 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 				}
 				//*****************
 
+				
+
 				//temp.push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0], x*R[0][1] + y*R[1][1] + z*R[2][1], x*R[0][2] + y*R[1][2] + z*R[2][2]));
 				//加偏移量
 				//data[i].push_back(regis::Point(x*R[0][0] + y*R[1][0] + z*R[2][0] + _vec[i].x, x*R[0][1] + y*R[1][1] + z*R[2][1] +_vec[i].y, x*R[0][2] + y*R[1][2] + z*R[2][2]));
@@ -372,6 +384,9 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 				(*pcddata[i]).push_back(PointT_pcl(xx, yy, zz));
 			}
 		}
+		
+		faro_altitude.push_back(device_high / highcount);
+
 		//remove NAN points from the cloud
 		std::vector<int> indices;
 		pcl::removeNaNFromPointCloud(*pcddata[i],*pcddata[i], indices);
@@ -383,7 +398,7 @@ void registration::extractFLS2PCD(std::vector<std::string> filename, std::vector
 	}
 
 	
-	showCloudsLeft(pcddata[0],pcddata[1]);
+	//showRotateCloudLeft(pcddata);
 
 }
 
@@ -1015,10 +1030,45 @@ void registration::CalculateFeature(double ocDis, bool x_bool, bool y_bool, bool
 	}
 }
 
-void registration::CalculateNormals()
+void registration::CalculateNormals(std::vector<regis::Vec> _vec)
 {
+	std::vector < pcl::NormalEstimation<PointT_pcl, pcl::Normal>> ne;
+	std::vector<pcl::PointCloud<pcl::Normal>::Ptr> nor;
+	
+	ne.resize(pcddata.size());
+	nor.resize(pcddata.size());
 
-}
+	for (int i =0;i<pcddata.size();i++)
+	{
+		pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+		nor[i]=cloud_normals;
+
+		ne[i].setInputCloud(pcddata[i]);
+		pcl::search::KdTree<PointT_pcl>::Ptr tree(new pcl::search::KdTree<PointT_pcl>());
+		ne[i].setSearchMethod(tree);
+		// Output datasets
+		ne[i].setViewPoint(_vec[i].x, _vec[i].y, faro_altitude[i]);
+		std::cout << "faro_altitude: " << _vec[i].x<<","<< _vec[i].y << "," << faro_altitude[i] << std::endl;
+		ne[i].setKSearch(24);
+		ne[i].compute(*nor[i]);
+	}
+
+ 	p->removePointCloud("l1");
+// 	//p->removePointCloud("l2");
+// 	
+// 
+ 	PointCloudColorHandlerCustom<PointT_pcl> tgt_h(pcddata[0], 255, 0, 0);
+// 	//PointCloudColorHandlerCustom<PointT_pcl> src_h(pcddata[1], 255, 0, 0);
+ 	p->addPointCloud(pcddata[0], tgt_h, "l1", vp_1);
+// 	//p->addPointCloud(pcddata[1], src_h, "l2", vp_1);
+	 
+	//p->addPointCloudNormals < PointT_pcl, pcl::Normal> (constPCD, constNormal,10,0.02,"l2",vp_1);
+	p->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "l1", vp_1);
+ 	p->addPointCloudNormals<PointT_pcl,pcl::Normal>(pcddata[0],nor[0],10,0.2,"normals",vp_1);
+// 
+	
+ 	p->spin();
+ }
 
 void registration::octreeTest(){
 // 	std::cout << "Example 1: Searching radius neighbors with default access by public x,y,z variables." << std::endl;
