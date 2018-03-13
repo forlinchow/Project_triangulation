@@ -192,6 +192,8 @@ public:
 
 	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform,double co_dis=0.1, bool downsample = false, double leaf_size = 0.1);
 
+	void pairAlign_ICP(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform, double co_dis = 0.1, bool downsample = false, double leaf_size = 0.1);
+
 	void showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source);
 
 	void showRotateCloudLeft(const std::vector<PointCloud::Ptr> clouds);

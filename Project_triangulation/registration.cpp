@@ -1127,14 +1127,14 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 
 	std::cout << "第一次拼接" << std::endl;
 	//预处理，抽稀
-	subsample(0.1);
+	subsample(0.04);
 	//获取特征数据
 	std::vector<PointCloud::Ptr> target_data;
 	for (int i = 0; i < data.size(); i++)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
-	getFeaturedata(target_data, 0, 0);
+	getFeaturedata(target_data, 0.9, 1);
 	std::cout << "特征数据获取完毕. " << std::endl;
 	//旋转点云,并初次记录旋转矩阵
 	for (size_t j = 0; j < target_data.size(); j++)
@@ -1177,7 +1177,7 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 			break;
 		}
 
-		pairAlign(target_data[ref], target_data[movef], result, transMat,0.5, true,0.1);
+		pairAlign(target_data[ref], target_data[movef], result, transMat,1.5, true,0.1);
 		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
 		final_matrix[movef] = transMat;
 	}
@@ -1186,31 +1186,23 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 
 	std::cout << "进行第二次迭代." << std::endl;
 	//预处理，抽稀
-	subsample(0.004);
+	subsample(0.03);
 	//获取特征数据
-	std::vector<PointCloud::Ptr> downsample_data;
-	downsample_data.clear();
 	target_data.clear();
 	for (int i = 0; i < data.size(); i++)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
-		downsample_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
 	getFeaturedata(target_data, 0.95,1);
-
-	subsample(0.03);
-	getFeaturedata(downsample_data, 0.95, 1);
 
 	std::cout << "特征数据获取完毕. " << std::endl;
 	//旋转点云，并加入第一次粗拼结果
 	for (size_t j = 0; j < target_data.size(); j++)
 	{
 		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
-		pcl::transformPointCloud(*downsample_data[j], *downsample_data[j], rot_matrix[j]);
 		if (j!=0)
 		{
 			pcl::transformPointCloud(*target_data[j], *target_data[j],final_matrix[j]);
-			pcl::transformPointCloud(*downsample_data[j], *downsample_data[j], final_matrix[j]);
 		}
 	}
 	std::cout << "旋转点云&第一次结果还原完毕." << std::endl;
@@ -1246,7 +1238,7 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 			break;
 		}
 
-		pairAlign(target_data[ref], downsample_data[movef], result, transMat,0.5,false);
+		pairAlign(target_data[ref], target_data[movef], result, transMat,0.1,false);
 		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
 		final_matrix[movef] = transMat * final_matrix[movef];
 	}
@@ -1294,25 +1286,105 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 		src = cloud_src;
 		tgt = cloud_tgt;
 	}
+	pcl::GeneralizedIterativeClosestPoint<PointT_pcl, PointT_pcl> reg;
+	reg.setTransformationEpsilon(1e-4);
+
+	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
+	// Note: adjust this based on the size of your datasets
+	reg.setMaxCorrespondenceDistance(co_dis);
+	//reg.setEuclideanFitnessEpsilon(1e-10);
+	//reg.setRANSACIterations(20);
+	//reg.setRANSACOutlierRejectionThreshold(1);
+
+	reg.setInputSource(src);
+	reg.setInputTarget(tgt);
+
+	//
+	// Run the same optimization in a loop and visualize the results
+	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity(), prev, targetToSource;
+	PointCloud::Ptr reg_result = src;
+	reg.setMaximumIterations(30);
+	for (int i = 0; i < 30; ++i)
+	{
+		PCL_INFO("Iteration Nr. %d.\n", i);
+		//cout << reg.getFinalTransformation() << endl;
+
+		// save cloud for visualization purpose
+		src = reg_result;
+
+		// Estimate
+		reg.setInputSource(src);
+		reg.align(*reg_result);
+
+		//accumulate transformation between each Iteration
+		Ti = reg.getFinalTransformation() * Ti;
+		cout << Ti << endl;
+		cout << "icp registration error" << reg.getFitnessScore() << std::endl;
+		//if the difference between this transformation and the previous one
+		//is smaller than the threshold, refine the process by reducing
+		//the maximal correspondence distance
+		if (fabs((reg.getLastIncrementalTransformation() - prev).sum()) < reg.getTransformationEpsilon())
+			reg.setMaxCorrespondenceDistance(reg.getMaxCorrespondenceDistance() - 0.001);
+
+		prev = reg.getLastIncrementalTransformation();
+
+		// visualize current state
+		//showCloudsRight(points_with_normals_tgt, points_with_normals_src);
+	}
+
+	// Get the transformation from target to source
+	targetToSource = Ti.inverse();
+
+	//
+	// Transform target back in source frame
+	pcl::transformPointCloud(*cloud_tgt, *output, targetToSource);
+
+	//add the source to the transformed target
+	*output += *cloud_src;
+
+	final_transform = targetToSource;
+}
+
+void registration::pairAlign_ICP(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f & final_transform, double co_dis, bool downsample, double leaf_size)
+{
+	PointCloud::Ptr src(new PointCloud);
+	PointCloud::Ptr tgt(new PointCloud);
+
+	pcl::VoxelGrid<PointT_pcl> grid;
+	if (downsample)
+	{
+		grid.setLeafSize(leaf_size, leaf_size, leaf_size);
+		grid.setInputCloud(cloud_src);
+		grid.filter(*src);
+
+		//tgt = cloud_tgt;
+		grid.setInputCloud(cloud_tgt);
+		grid.filter(*tgt);
+	}
+	else
+	{
+		src = cloud_src;
+		tgt = cloud_tgt;
+	}
 
 	// Compute surface normals and curvature
-// 	PointCloudWithNormals::Ptr points_with_normals_src(new PointCloudWithNormals);
-// 	PointCloudWithNormals::Ptr points_with_normals_tgt(new PointCloudWithNormals);
-// 
-// 	pcl::NormalEstimation<PointT_pcl, PointNormalT> norm_est;
-// 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
-// 	norm_est.setSearchMethod(tree);
-// 	norm_est.setKSearch(15);
-// 
-// 	norm_est.setInputCloud(src);
-// 	norm_est.setViewPoint(27.419594, 6.191127, 0.0);
-// 	norm_est.compute(*points_with_normals_src);
-// 	pcl::copyPointCloud(*src, *points_with_normals_src);
-// 
-// 	norm_est.setInputCloud(tgt);
-// 	norm_est.setViewPoint(20.608019, 6.209724, 0.0);
-// 	norm_est.compute(*points_with_normals_tgt);
-// 	pcl::copyPointCloud(*tgt, *points_with_normals_tgt);
+	// 	PointCloudWithNormals::Ptr points_with_normals_src(new PointCloudWithNormals);
+	// 	PointCloudWithNormals::Ptr points_with_normals_tgt(new PointCloudWithNormals);
+	// 
+	// 	pcl::NormalEstimation<PointT_pcl, PointNormalT> norm_est;
+	// 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+	// 	norm_est.setSearchMethod(tree);
+	// 	norm_est.setKSearch(15);
+	// 
+	// 	norm_est.setInputCloud(src);
+	// 	norm_est.setViewPoint(27.419594, 6.191127, 0.0);
+	// 	norm_est.compute(*points_with_normals_src);
+	// 	pcl::copyPointCloud(*src, *points_with_normals_src);
+	// 
+	// 	norm_est.setInputCloud(tgt);
+	// 	norm_est.setViewPoint(20.608019, 6.209724, 0.0);
+	// 	norm_est.compute(*points_with_normals_tgt);
+	// 	pcl::copyPointCloud(*tgt, *points_with_normals_tgt);
 
 	//
 	// Instantiate our custom point representation (defined above) ...
@@ -1387,19 +1459,19 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 	// Transform target back in source frame
 	pcl::transformPointCloud(*cloud_tgt, *output, targetToSource);
 
-// 	p->removePointCloud("source");
-// 	p->removePointCloud("target");
+	// 	p->removePointCloud("source");
+	// 	p->removePointCloud("target");
 
-// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_tgt_h(output, 0, 255, 0);
-// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_src_h(cloud_src, 255, 0, 0);
-// 	p->addPointCloud(output, cloud_tgt_h, "target", vp_2);
-// 	p->addPointCloud(cloud_src, cloud_src_h, "source", vp_2);
+	// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_tgt_h(output, 0, 255, 0);
+	// 	PointCloudColorHandlerCustom<PointT_pcl> cloud_src_h(cloud_src, 255, 0, 0);
+	// 	p->addPointCloud(output, cloud_tgt_h, "target", vp_2);
+	// 	p->addPointCloud(cloud_src, cloud_src_h, "source", vp_2);
 
-//	PCL_INFO("Press q to continue the registration.\n");
-// 	p->spin();
-// 
-// 	p->removePointCloud("source");
-// 	p->removePointCloud("target");
+	//	PCL_INFO("Press q to continue the registration.\n");
+	// 	p->spin();
+	// 
+	// 	p->removePointCloud("source");
+	// 	p->removePointCloud("target");
 
 	//add the source to the transformed target
 	*output += *cloud_src;
