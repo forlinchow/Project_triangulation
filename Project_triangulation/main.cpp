@@ -52,9 +52,9 @@ void main(){
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_011.fls"));
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_012.fls"));
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_013.fls"));
-	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_024.fls"));
+	
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_014.fls"));
-	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_025.fls"));
+	
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_016.fls"));
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_017.fls"));
 	filepath.push_back(std::string("ZQ_gcq_dongbeijiao_018.fls"));
@@ -75,19 +75,29 @@ void main(){
 //  	_vec.push_back(regis::Vec(3.48,2.39));
 
 	//宝岗大道数据
-	_vec.push_back(regis::Vec(5.20,10.13 ));
-	_vec.push_back(regis::Vec(4.86,8.59 ));
-	_vec.push_back(regis::Vec(3.49,8.51 ));
-	_vec.push_back(regis::Vec(7.09,7.75 ));
-	_vec.push_back(regis::Vec(6.39,5.38 ));
-	_vec.push_back(regis::Vec(6.82,4.78 ));
-	_vec.push_back(regis::Vec(4.12,4.12 ));
-	_vec.push_back(regis::Vec(2.99,4.16 ));
-	_vec.push_back(regis::Vec(4.09,1.92 ));
-	_vec.push_back(regis::Vec(1.99,2.04 ));
-	_vec.push_back(regis::Vec(1.45,2.26 ));
-	_vec.push_back(regis::Vec(6.25,2.91 ));
+// 	_vec.push_back(regis::Vec(5.20,10.13 ));
+// 	_vec.push_back(regis::Vec(4.86,8.59 ));
+// 	_vec.push_back(regis::Vec(3.49,8.51 ));
+// 	
+// 	_vec.push_back(regis::Vec(6.39,5.38 ));
+// 	
+// 	_vec.push_back(regis::Vec(4.12,4.12 ));
+// 	_vec.push_back(regis::Vec(2.99,4.16 ));
+// 	_vec.push_back(regis::Vec(4.09,1.92 ));
+// 	_vec.push_back(regis::Vec(1.99,2.04 ));
+// 	_vec.push_back(regis::Vec(1.45,2.26 ));
+// 	_vec.push_back(regis::Vec(6.25,2.91 ));
 
+	_vec.push_back(regis::Vec(0,0));
+	_vec.push_back(regis::Vec(0.918396770954, -1.558332443237));
+	_vec.push_back(regis::Vec(-0.752447783947, -2.463551998138));
+	_vec.push_back(regis::Vec(4.061025619507, -3.284204483032));
+	_vec.push_back(regis::Vec(1.949174523354, -5.921883106232));
+	_vec.push_back(regis::Vec(0.893135547638, -6.755644321442));
+	_vec.push_back(regis::Vec(2.673031568527, -7.681530952454));
+	_vec.push_back(regis::Vec(1.415142059326, -8.725822448730));
+	_vec.push_back(regis::Vec(0.742939174175, -8.979494094849));
+	_vec.push_back(regis::Vec(4.568075180054, -5.781255722046));
 
 // 	043，27.39，6.21
 // 		044，20.57.6.18，
@@ -96,18 +106,26 @@ void main(){
 // 		047，3.48.2.39
 
 	registration t;
+	
 	t.extractFLSData(filepath,_vec, 1);
-	//t.extractFLS2PCD(filepath, _vec, 1);
+	//t.extractData(filepath, _vec, 1);
+
+	//t.getPlan(filepath, 6, 5,true);
+	//t.extractFLS2PCD(filepath, _vec, 2, 10, false);
+	//t.extractFLS2PCD_parellel(filepath, _vec,1,10);
+	
+	t.CalculateFeature(0.05, 0, 0, 1);
+
 	//t.CalculateNormals(_vec);
 	//t.extractCsvData(filepath, _vec);
  	t.subsample(0.04);
- 	t.CalculateFeature(0.05,1,0,0);
+  	
 // 	
 	//t.extractCsvData(filepath, _vec);
 // // 	t.getdatasize();
-  	double ang=t.getRotation_onRender(_vec,5);
-
-	t.AlignClouds(ang,_vec);
+	double ang=t.getRotation_onRender(_vec,5);
+// 
+ 	t.AlignClouds(ang,_vec);
 	//t.getRotation2(_vec, 5);
  	//t.octreeTest();
 // // 	Triangulation t;

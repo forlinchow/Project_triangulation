@@ -10,6 +10,7 @@
 #include <pcl/point_representation.h>
 #include <pcl/common/common_headers.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/features/normal_3d.h>
@@ -100,10 +101,9 @@ namespace regis {
 		Vec(double a,double b):x(a),y(b){}
 	};
 
-	template<class PointT>
 	struct threadParam
 	{
-		std::vector<PointT>* ptCloud;
+		std::vector<regis::Point>* ptCloud;
 		ocTree* octree;
 		std::string filepath;
 		regis::Vec offset;
@@ -113,6 +113,20 @@ namespace regis {
 			octree = NULL; 
 		}
 	};
+
+	struct threadParam4pcd
+	{
+		PointCloud::Ptr pointCloud;
+		std::string filepath;
+		regis::Vec offset;
+		HANDLE* _mutex;
+		int scale;
+		float scan_dis;
+		float* faro_altitue;
+		regis::Box* box;
+		threadParam4pcd() :scale(1),scan_dis(10),faro_altitue(0) {}
+	};
+	
 
 	struct findNearestParam 
 	{
@@ -140,15 +154,16 @@ public:
 	}
 	;
 	
-	template<class PointT>
-	void extractData(std::vector<PointT> pCloud, std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
-
-	//void extractFLS2PCD_parellel(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);   //多线程版本
+	void extractData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
 
 	void extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1 );
 
-	void extractFLS2PCD(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);
+	void extractFLS2PCD_parellel(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1,float scan_dis = 10, bool showCloud = false);   //多线程版本
+
+	void extractFLS2PCD(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1,float scan_dis=10,bool showCloud=false);
 	
+	void getPlan(std::vector<std::string> filename, int scale = 1, float scan_dis = 10, bool showCloud = false);
+
 	void extractCsvData(std::vector<std::string> filename, std::vector<regis::Vec> _vec);
 
 	regis::Point rotatePoint(regis::Point p, regis::Point rotateCenter, double angle);
@@ -249,6 +264,7 @@ private:
 
 	std::vector<std::vector<uint32_t>>subdata_ind;
 	std::vector<PointCloud::Ptr> pcddata;
+	std::vector<unibn::Octree<PointT_pcl>> pcdOctree;
 	pcl::visualization::PCLVisualizer *p;
 	int vp_1, vp_2;
 	HANDLE _mutex;
