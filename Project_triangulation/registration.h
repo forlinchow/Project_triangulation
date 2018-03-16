@@ -97,8 +97,9 @@ namespace regis {
 	{
 		double x;
 		double y;
-		Vec():x(0),y(0){}
-		Vec(double a,double b):x(a),y(b){}
+		double ang;
+		Vec():x(0),y(0),ang(0){}
+		Vec(double a,double b,double c):x(a),y(b),ang(c){}
 	};
 
 	struct threadParam
@@ -156,7 +157,7 @@ public:
 	
 	void extractData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1);    //多线程版本
 
-	void extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1 );
+	void extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1, float scan_dis = 10);
 
 	void extractFLS2PCD_parellel(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale = 1,float scan_dis = 10, bool showCloud = false);   //多线程版本
 
@@ -203,7 +204,7 @@ public:
 
 	void writefileTest();
 
-	void AlignClouds(double ang, std::vector<regis::Vec> _vec);
+	void AlignClouds(std::vector<regis::Vec> _vec);
 
 	void pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform,double co_dis=0.1, bool downsample = false, double leaf_size = 0.1);
 

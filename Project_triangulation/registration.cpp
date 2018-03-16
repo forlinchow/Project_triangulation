@@ -264,12 +264,11 @@ void registration::extractData(std::vector<std::string> filename, std::vector<re
 	CoUninitialize();
 }
 
-void registration::extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale)
+void registration::extractFLSData(std::vector<std::string> filename, std::vector<regis::Vec> _vec, int scale, float scan_dis)
 {
 	data.resize(filename.size());
 	octree.resize(filename.size());
 	boundingBox.resize(filename.size());
-	fileName = filename;
 	for (int32_t i = 0; i < filename.size(); i++)
 	{
 		CoInitialize(NULL);
@@ -314,6 +313,7 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 		R[2][2] = z * z * (1 - ca) + ca;
 
 		double minx = 0, miny = 0, minz = 0, maxx = 0, maxy = 0, maxz = 0;
+//#pragma omp parallel for
 		for (int col = 0; col < cols; col = col + scale)
 		{
 			for (int row = 0; row < rows; row = row + scale) {
@@ -328,7 +328,7 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 				yy = x*R[0][1] + y*R[1][1] + z*R[2][1];
 				zz = x*R[0][2] + y*R[1][2] + z*R[2][2];
 
-				if (xx*xx + yy*yy + zz*zz > 100)
+				if (std::pow(xx*xx + yy*yy + zz*zz, 0.5) > scan_dis)
 				{
 					continue;
 				}
@@ -370,6 +370,7 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 				data[i].push_back(regis::Point(xx, yy, zz));
 			}
 		}
+
 		boundingBox[i] = regis::Box(minx, miny, minz, maxx, maxy, maxz);
 
 		std::cout << "initialize octree for " << filename[i] << std::endl;
@@ -1390,7 +1391,7 @@ void registration::writefileTest()
 
 }
 
-void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
+void registration::AlignClouds(std::vector<regis::Vec> _vec)
 {
 	//最终变换矩阵，输出用
 	std::vector < Eigen::Matrix4f> final_matrix;
@@ -1408,103 +1409,114 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
-	getFeaturedata(target_data, 0.9, 1);
+	getFeaturedata(target_data, 0, 1);
 	std::cout << "特征数据获取完毕. " << std::endl;
+	
 	//旋转点云,并初次记录旋转矩阵
-	for (size_t j = 0; j < target_data.size(); j++)
+	for (int j = 0; j < target_data.size(); j++)
 	{
-		rot_matrix[j] = rot_mat(Eigen::Vector3f(_vec[j].x, _vec[j].y, 0), Eigen::Vector3f(0, 0, 1), ang / 180 * M_PI);
+		rot_matrix[j] = rot_mat(Eigen::Vector3f(_vec[j].x, _vec[j].y, 0), Eigen::Vector3f(0, 0, 1), _vec[j].ang / 180 * M_PI);
 		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
 	}
 	std::cout << "旋转点云完毕." << std::endl;
+	showRotateCloudLeft(target_data);
 	std::cout << "进行初次迭代." << std::endl;
+
 	PointCloud::Ptr result(new PointCloud);
 	Eigen::Matrix4f transMat;
-	for (size_t i = 0; i < target_data.size() - 1; i++)
+	for (int i = 0; i < target_data.size() - 1; i++)
 	{
 		int ref, movef;
 		switch (i)
 		{
-		case 0:
-			ref = 0, movef = 1;
-		case 1:
-			ref = 1, movef = 2;
-		case 2:
-			ref = 1, movef = 3;
-		case 3:
-			ref = 3, movef = 4;
-		case 4:
-			ref = 3, movef = 5;
-		case 5:
-			ref = 5, movef = 6;
-		case 6:
-			ref = 5, movef = 7;
-		case 7:
-			ref = 7, movef = 8;
-		case 8:
-			ref = 8, movef = 9;
-		default:
-			break;
+		case 0: {
+			ref = 0, movef = 1; break; }
+		case 1: {
+			ref = 1, movef = 2; break; }
+		case 2: {
+			ref = 1, movef = 3; break; }
+		case 3: {
+			ref = 3, movef = 4; break; }
+		case 4: {
+			ref = 4, movef = 5; break; }
+		case 5: {
+			ref = 4, movef = 6; break; }
+		case 6: {
+			ref = 6, movef = 7; break; }
+		case 7: {
+			ref = 7, movef = 8; break; }
+		case 8: {
+			ref = 3, movef = 9; break; }
+		default: {
+			break; }
 		}
-
-		pairAlign(target_data[ref], target_data[movef], result, transMat, 1.5, true, 0.1);
+		std::cout << ref <<","<<movef<< std::endl;
+		pairAlign(target_data[ref], target_data[movef], result, transMat, 0.1, true, 0.2);
 		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
+		cout << "this is " << movef << endl;
+		cout << transMat <<endl;
 		final_matrix[movef] = transMat;
+		cout << final_matrix[movef] << endl;
 	}
 	std::cout << "初次迭代结束，按q继续精拼." << std::endl;
 	showRotateCloudLeft(target_data);
 
 	std::cout << "进行第二次迭代." << std::endl;
 	//预处理，抽稀
-	subsample(0.03);
+	subsample(0.003);
 	//获取特征数据
 	target_data.clear();
 	for (int i = 0; i < data.size(); i++)
 	{
 		target_data.push_back(PointCloud::Ptr(new PointCloud));
 	}
-	getFeaturedata(target_data, 0.95, 1);
-
+	getFeaturedata(target_data, 0.8, 0.2);
+	
 	std::cout << "特征数据获取完毕. " << std::endl;
+	showRotateCloudRight(target_data);
 	//旋转点云，并加入第一次粗拼结果
-	for (size_t j = 0; j < target_data.size(); j++)
+	for (int j = 0; j < target_data.size(); j++)
 	{
 		pcl::transformPointCloud(*target_data[j], *target_data[j], rot_matrix[j]);
-		if (j != 0)
-		{
-			pcl::transformPointCloud(*target_data[j], *target_data[j], final_matrix[j]);
-		}
+	}
+	showRotateCloudLeft(target_data);
+	for (int j = 1; j < target_data.size(); j++)
+	{
+		cout << "this is " << j << endl;
+		cout << final_matrix[j] << endl;
+		pcl::transformPointCloud(*target_data[j], *target_data[j], final_matrix[j]);
 	}
 	std::cout << "旋转点云&第一次结果还原完毕." << std::endl;
+	showRotateCloudLeft(target_data);
 	std::cout << "进行第二次迭代." << std::endl;
-	for (size_t i = 0; i < target_data.size() - 1; i++)
+	for (int i = 0; i < target_data.size() - 1; i++)
 	{
 		int ref, movef;
 		switch (i)
 		{
-		case 0:
-			ref = 0, movef = 1;
-		case 1:
-			ref = 1, movef = 2;
-		case 2:
-			ref = 1, movef = 3;
-		case 3:
-			ref = 3, movef = 4;
-		case 4:
-			ref = 3, movef = 5;
-		case 5:
-			ref = 5, movef = 6;
-		case 6:
-			ref = 5, movef = 7;
-		case 7:
-			ref = 7, movef = 8;
-		case 8:
-			ref = 8, movef = 9;
-		default:
-			break;
+		case 0: {
+			ref = 0, movef = 1; break; }
+		case 1: {
+			ref = 1, movef = 2; break; }
+		case 2: {
+			ref = 1, movef = 3; break; }
+		case 3: {
+			ref = 3, movef = 4; break; }
+		case 4: {
+			ref = 4, movef = 5; break; }
+		case 5: {
+			ref = 4, movef = 6; break; }
+		case 6: {
+			ref = 6, movef = 7; break; }
+		case 7: {
+			ref = 7, movef = 8; break; }
+		case 8: {
+			ref = 3, movef = 9; break; }
+		default: {
+			break; }
 		}
 
-		pairAlign(target_data[ref], target_data[movef], result, transMat, 0.1, false);
+		pairAlign(target_data[ref], target_data[movef], result, transMat, 0.01, true, 0.1);
 		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
 		final_matrix[movef] = transMat * final_matrix[movef];
 	}
@@ -1528,6 +1540,7 @@ void registration::AlignClouds(double ang, std::vector<regis::Vec> _vec)
 	}
 
 	exportpose(final_matrix, fileName);
+
 	showRotateCloudLeft(target_data);
 }
 
@@ -1553,7 +1566,7 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 		tgt = cloud_tgt;
 	}
 	pcl::GeneralizedIterativeClosestPoint<PointT_pcl, PointT_pcl> reg;
-	reg.setTransformationEpsilon(1e-4);
+	//reg.setTransformationEpsilon(1e-4);
 
 	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
 	// Note: adjust this based on the size of your datasets
@@ -1584,8 +1597,8 @@ void registration::pairAlign(const PointCloud::Ptr cloud_src, const PointCloud::
 
 		//accumulate transformation between each Iteration
 		Ti = reg.getFinalTransformation() * Ti;
-		cout << Ti << endl;
-		cout << "icp registration error" << reg.getFitnessScore() << std::endl;
+// 		cout << Ti << endl;
+ 		cout << "icp registration error" << reg.getFitnessScore() << std::endl;
 		//if the difference between this transformation and the previous one
 		//is smaller than the threshold, refine the process by reducing
 		//the maximal correspondence distance
@@ -1837,7 +1850,7 @@ void registration::getFeaturedata(std::vector<PointCloud::Ptr> tPtr, double fea,
 		}
 		std::cout << "特征数据 " << i << "大小为:" << tPtr[i]->size() << std::endl;
 	}
-	showRotateCloudLeft(tPtr);
+	//showRotateCloudLeft(tPtr);
 }
 
 void registration::exportpose(std::vector<Eigen::Matrix4f> mat, std::vector<std::string> name)
