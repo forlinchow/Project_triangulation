@@ -269,8 +269,10 @@ void registration::extractFLSData(std::vector<std::string> filename, std::vector
 	data.resize(filename.size());
 	octree.resize(filename.size());
 	boundingBox.resize(filename.size());
+	fileName.resize(filename.size());
 	for (int32_t i = 0; i < filename.size(); i++)
 	{
+		fileName[i] = filename[i];
 		CoInitialize(NULL);
 		// 以下liscence需要整段输入，key放入liscence key
 		BSTR licenseCode =
@@ -1185,7 +1187,7 @@ double registration::getRotation_onRender(std::vector<regis::Vec> _vec, double s
 	return min_err_angle;
 }
 
-void registration::getVisableArea()
+void registration::getVisableArea(PointCloud::Ptr ref, PointCloud::Ptr move, regis::Vec refV,regis::Vec moveV)
 {
 
 }
@@ -1516,7 +1518,7 @@ void registration::AlignClouds(std::vector<regis::Vec> _vec)
 			break; }
 		}
 
-		pairAlign(target_data[ref], target_data[movef], result, transMat, 0.01, true, 0.1);
+		pairAlign(target_data[ref], target_data[movef], result, transMat, 0.01, true, 0.01);
 		pcl::transformPointCloud(*target_data[movef], *target_data[movef], transMat);
 		final_matrix[movef] = transMat * final_matrix[movef];
 	}
